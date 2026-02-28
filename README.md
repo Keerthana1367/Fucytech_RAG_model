@@ -1,4 +1,3 @@
-# Fucytech_RAG_model
 Fucytech_RAG_model/
 │
 ├── Data/
