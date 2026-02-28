@@ -15,12 +15,12 @@ Fucytech_RAG_model/
 │   └── mobile-attack (1).json
 │
 ├── Othernotebooks/
-│   ├── BMS_rag_4.ipynb
-│   ├── RAG_chatbot.ipynb
-│   └── fucytech_RAG.ipynb
+│   ├── BMS_rag_4.ipynb    
+│   ├── RAG_chatbot.ipynb     #chatbot 
+│   └── fucytech_RAG.ipynb    #tara_report generation
 │
 ├── final/
-│   └── Template_Extraction_RAG.ipynb
+│   └── Template_Extraction_RAG.ipynb   # extraction of item_definition and damage_scenarios from bms.json 
 │
 └── README.md
 ```
