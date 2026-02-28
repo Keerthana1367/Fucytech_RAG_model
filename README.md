@@ -1,4 +1,4 @@
-'''
+'''bash
 Fucytech_RAG_model/
 │
 ├── Data/
