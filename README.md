@@ -1,3 +1,4 @@
+'''
 Fucytech_RAG_model/
 │
 ├── Data/
@@ -19,3 +20,4 @@ Fucytech_RAG_model/
 │   └── Template_Extraction_RAG.ipynb
 │
 └── README.md
+'''
