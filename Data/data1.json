@@ -1,0 +1,33 @@
+{
+  "infotainment": {
+    "name": "Vehicle Infotainment System",
+    "type": "Vehicle System",
+    "domain": "HMI",
+    "description": "In-vehicle infotainment platform providing media playback, navigation, smartphone connectivity, and user interface interaction with the vehicle.",
+    "interfaces": [
+      "CAN Bus",
+      "Bluetooth",
+      "WiFi",
+      "USB",
+      "Display Interface",
+      "Microphone",
+      "Speaker System"
+    ],
+    "hint": "Typical architecture includes head unit processor, operating system, connectivity modules, display system, media processing, storage, and vehicle network interfaces."
+  },
+
+  "gateway_ecu": {
+    "name": "Vehicle Gateway ECU",
+    "type": "ECU",
+    "domain": "Vehicle Network",
+    "description": "Central communication controller responsible for routing and filtering messages between different in-vehicle networks.",
+    "interfaces": [
+      "CAN Bus",
+      "LIN Bus",
+      "Ethernet",
+      "Diagnostics Interface",
+      "Security Module"
+    ],
+    "hint": "Typical architecture includes network controllers, message routing logic, firewall or filtering modules, security gateway functionality, and diagnostic interfaces."
+  }
+}
