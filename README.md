@@ -20,7 +20,8 @@ Fucytech_RAG_model/
 │   └── fucytech_RAG.ipynb    #tara_report generation
 │
 ├── final/
-│   └── Template_Extraction_RAG.ipynb   # extraction of item_definition and damage_scenarios from bms.json 
+│   └── Template_Extraction_RAG.ipynb   # extraction of item_definition and damage_scenarios from bms.json
+    └── Tara_rag_c.ipynb
 │
 └── README.md
 ```
