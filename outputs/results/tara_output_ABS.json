@@ -1,0 +1,494 @@
+{
+  "item_definition": {
+    "template": {
+      "nodes": [
+        {
+          "id": "abs_system",
+          "type": "group",
+          "parentId": null,
+          "data": {
+            "label": "ABS (Anti-lock Braking System)"
+          },
+          "position": {
+            "x": 500,
+            "y": 100
+          }
+        },
+        {
+          "id": "abs_ecu",
+          "type": "default",
+          "parentId": "abs_system",
+          "data": {
+            "label": "ABS ECU"
+          },
+          "position": {
+            "x": 400,
+            "y": 300
+          },
+          "properties": [
+            "Integrity",
+            "Confidentiality",
+            "Availability"
+          ]
+        },
+        {
+          "id": "brake_control_logic",
+          "type": "default",
+          "parentId": "abs_ecu",
+          "data": {
+            "label": "Brake Control Logic"
+          },
+          "position": {
+            "x": 350,
+            "y": 500
+          },
+          "properties": [
+            "Integrity",
+            "Confidentiality",
+            "Availability"
+          ]
+        },
+        {
+          "id": "wheel_speed_sensors",
+          "type": "default",
+          "parentId": "abs_system",
+          "data": {
+            "label": "Wheel Speed Sensors"
+          },
+          "position": {
+            "x": 600,
+            "y": 300
+          },
+          "properties": [
+            "Integrity",
+            "Availability"
+          ]
+        },
+        {
+          "id": "hydraulic_control_unit",
+          "type": "default",
+          "parentId": "abs_system",
+          "data": {
+            "label": "Hydraulic Control Unit"
+          },
+          "position": {
+            "x": 500,
+            "y": 500
+          },
+          "properties": [
+            "Integrity",
+            "Availability"
+          ]
+        },
+        {
+          "id": "uds_interface",
+          "type": "default",
+          "parentId": "abs_ecu",
+          "data": {
+            "label": "UDS Diagnostic Interface"
+          },
+          "position": {
+            "x": 450,
+            "y": 500
+          },
+          "properties": [
+            "Integrity",
+            "Confidentiality",
+            "Availability"
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "e1",
+          "source": "abs_system",
+          "target": "abs_ecu",
+          "data": {
+            "label": "CAN"
+          }
+        },
+        {
+          "id": "e2",
+          "source": "abs_ecu",
+          "target": "brake_control_logic",
+          "data": {
+            "label": "Internal Bus"
+          }
+        },
+        {
+          "id": "e3",
+          "source": "wheel_speed_sensors",
+          "target": "abs_system",
+          "data": {
+            "label": "CAN"
+          }
+        },
+        {
+          "id": "e4",
+          "source": "hydraulic_control_unit",
+          "target": "abs_system",
+          "data": {
+            "label": "CAN"
+          }
+        },
+        {
+          "id": "e5",
+          "source": "abs_ecu",
+          "target": "uds_interface",
+          "data": {
+            "label": "OBD-II / UDS"
+          }
+        }
+      ],
+      "details": [
+        {
+          "nodeId": "abs_system",
+          "name": "ABS (Anti-lock Braking System)",
+          "desc": "The overall Anti-lock Braking System encompassing all its sub-components and their interactions.",
+          "type": "group",
+          "props": []
+        },
+        {
+          "nodeId": "abs_ecu",
+          "name": "ABS ECU",
+          "desc": "The primary Electronic Control Unit responsible for processing sensor data, implementing ABS logic, and controlling actuators. It includes MCU, firmware, and calibration data.",
+          "type": "default",
+          "props": [
+            {
+              "name": "Integrity",
+              "id": "p1"
+            },
+            {
+              "name": "Confidentiality",
+              "id": "p2"
+            },
+            {
+              "name": "Availability",
+              "id": "p3"
+            }
+          ]
+        },
+        {
+          "nodeId": "brake_control_logic",
+          "name": "Brake Control Logic",
+          "desc": "The core software module within the ABS ECU that implements the ABS algorithms, making decisions based on wheel speed, vehicle dynamics, and driver input.",
+          "type": "default",
+          "props": [
+            {
+              "name": "Integrity",
+              "id": "p4"
+            },
+            {
+              "name": "Confidentiality",
+              "id": "p5"
+            },
+            {
+              "name": "Availability",
+              "id": "p6"
+            }
+          ]
+        },
+        {
+          "nodeId": "wheel_speed_sensors",
+          "name": "Wheel Speed Sensors",
+          "desc": "Sensors that measure the rotational speed of each wheel, providing critical input data to the ABS ECU. Communication typically via CAN.",
+          "type": "default",
+          "props": [
+            {
+              "name": "Integrity",
+              "id": "p7"
+            },
+            {
+              "name": "Availability",
+              "id": "p8"
+            }
+          ]
+        },
+        {
+          "nodeId": "hydraulic_control_unit",
+          "name": "Hydraulic Control Unit (HCU)",
+          "desc": "The actuator responsible for modulating brake fluid pressure to individual wheels based on commands from the ABS ECU, enabling the anti-lock function. Communicates via CAN.",
+          "type": "default",
+          "props": [
+            {
+              "name": "Integrity",
+              "id": "p9"
+            },
+            {
+              "name": "Availability",
+              "id": "p10"
+            }
+          ]
+        },
+        {
+          "nodeId": "uds_interface",
+          "name": "UDS Diagnostic Interface",
+          "desc": "The interface supporting the Unified Diagnostic Services (UDS) protocol, allowing for diagnostics, parameter reading, and potential actuation control through the OBD-II port. This is an external-facing trust boundary.",
+          "type": "default",
+          "props": [
+            {
+              "name": "Integrity",
+              "id": "p11"
+            },
+            {
+              "name": "Confidentiality",
+              "id": "p12"
+            },
+            {
+              "name": "Availability",
+              "id": "p13"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "damage_scenarios": {
+    "Derivations": [
+      {
+        "id": "T-01",
+        "nodeId": "uds_interface",
+        "task": "Threat Analysis",
+        "name": "Firmware Tampering via UDS",
+        "loss": "Integrity",
+        "asset": "ABS ECU Firmware",
+        "damage_scene": "An attacker with physical access to the OBD-II port exploits a vulnerability in the UDS diagnostic interface to overwrite or corrupt the ABS ECU firmware, leading to erratic braking behavior or complete system failure.",
+        "isChecked": false
+      },
+      {
+        "id": "T-02",
+        "nodeId": "abs_ecu",
+        "task": "Threat Analysis",
+        "name": "CAN Bus Message Injection",
+        "loss": "Availability",
+        "asset": "ABS ECU",
+        "damage_scene": "An attacker injects forged CAN messages (e.g., false wheel speed signals) onto the ABS network, overwhelming the ABS ECU and causing it to shut down or malfunction, disabling ABS functionality.",
+        "isChecked": false
+      },
+      {
+        "id": "T-03",
+        "nodeId": "brake_control_logic",
+        "task": "Threat Analysis",
+        "name": "User Data Corruption",
+        "loss": "Integrity",
+        "asset": "ABS Calibration Data",
+        "damage_scene": "An attacker gains unauthorized access to the ABS ECU and corrupts critical calibration data within the brake control logic, leading to incorrect ABS activation thresholds and compromised braking performance.",
+        "isChecked": false
+      },
+      {
+        "id": "T-04",
+        "nodeId": "abs_ecu",
+        "task": "Threat Analysis",
+        "name": "Physical Debug Port Access",
+        "loss": "Confidentiality",
+        "asset": "ABS ECU Debug Interface (JTAG/UART)",
+        "damage_scene": "An attacker gains physical access to a debug port (e.g., JTAG or UART) on the ABS ECU, allowing them to extract sensitive information such as proprietary algorithms, cryptographic keys, or firmware secrets.",
+        "isChecked": false
+      },
+      {
+        "id": "T-05",
+        "nodeId": "wheel_speed_sensors",
+        "task": "Threat Analysis",
+        "name": "Spoofed Wheel Speed Sensor Data",
+        "loss": "Integrity",
+        "asset": "Wheel Speed Sensor Signals",
+        "damage_scene": "An attacker manipulates or spoofs the signals from wheel speed sensors, sending false data to the ABS ECU. This could cause the ABS to activate unnecessarily or fail to activate when needed, leading to loss of vehicle control.",
+        "isChecked": false
+      }
+    ],
+    "Details": [
+      {
+        "Name": "Firmware Tampering via UDS",
+        "Description": "An attacker with physical access to the OBD-II port exploits a vulnerability in the UDS diagnostic interface to overwrite or corrupt the ABS ECU firmware, leading to erratic braking behavior or complete system failure.",
+        "cyberLosses": [
+          {
+            "id": "cl-1",
+            "name": "Integrity",
+            "node": "ABS ECU Firmware",
+            "nodeId": "uds_interface",
+            "isSelected": true
+          }
+        ],
+        "impacts": {
+          "Financial Impact": "Major",
+          "Safety Impact": "Severe",
+          "Operational Impact": "Severe",
+          "Privacy Impact": "Negligible"
+        },
+        "key": 1,
+        "_id": "bd0672a4-471d-4a21-89d2-28e5c5d20355"
+      },
+      {
+        "Name": "CAN Bus Message Injection",
+        "Description": "An attacker injects forged CAN messages (e.g., false wheel speed signals) onto the ABS network, overwhelming the ABS ECU and causing it to shut down or malfunction, disabling ABS functionality.",
+        "cyberLosses": [
+          {
+            "id": "cl-1",
+            "name": "Availability",
+            "node": "ABS ECU",
+            "nodeId": "abs_ecu",
+            "isSelected": true
+          }
+        ],
+        "impacts": {
+          "Financial Impact": "Moderate",
+          "Safety Impact": "Major",
+          "Operational Impact": "Major",
+          "Privacy Impact": "Negligible"
+        },
+        "key": 2,
+        "_id": "c1b9a8f3-5e6c-4b7d-8a2f-1e9d3b5c7a8f"
+      },
+      {
+        "Name": "User Data Corruption",
+        "Description": "An attacker gains unauthorized access to the ABS ECU and corrupts critical calibration data within the brake control logic, leading to incorrect ABS activation thresholds and compromised braking performance.",
+        "cyberLosses": [
+          {
+            "id": "cl-1",
+            "name": "Integrity",
+            "node": "ABS Calibration Data",
+            "nodeId": "brake_control_logic",
+            "isSelected": true
+          }
+        ],
+        "impacts": {
+          "Financial Impact": "Major",
+          "Safety Impact": "Severe",
+          "Operational Impact": "Major",
+          "Privacy Impact": "Negligible"
+        },
+        "key": 3,
+        "_id": "d2a8e7f4-6f7d-5c8e-9b3e-2f0e4c6d8b9a"
+      },
+      {
+        "Name": "Physical Debug Port Access",
+        "Description": "An attacker gains physical access to a debug port (e.g., JTAG or UART) on the ABS ECU, allowing them to extract sensitive information such as proprietary algorithms, cryptographic keys, or firmware secrets.",
+        "cyberLosses": [
+          {
+            "id": "cl-1",
+            "name": "Confidentiality",
+            "node": "ABS ECU Debug Interface (JTAG/UART)",
+            "nodeId": "abs_ecu",
+            "isSelected": true
+          }
+        ],
+        "impacts": {
+          "Financial Impact": "Moderate",
+          "Safety Impact": "Minor",
+          "Operational Impact": "Minor",
+          "Privacy Impact": "Major"
+        },
+        "key": 4,
+        "_id": "e3b7f6a5-7a8e-6d9f-0c4d-3e1f5d7e9c0b"
+      },
+      {
+        "Name": "Spoofed Wheel Speed Sensor Data",
+        "Description": "An attacker manipulates or spoofs the signals from wheel speed sensors, sending false data to the ABS ECU. This could cause the ABS to activate unnecessarily or fail to activate when needed, leading to loss of vehicle control.",
+        "cyberLosses": [
+          {
+            "id": "cl-1",
+            "name": "Integrity",
+            "node": "Wheel Speed Sensor Signals",
+            "nodeId": "wheel_speed_sensors",
+            "isSelected": true
+          }
+        ],
+        "impacts": {
+          "Financial Impact": "Major",
+          "Safety Impact": "Severe",
+          "Operational Impact": "Major",
+          "Privacy Impact": "Negligible"
+        },
+        "key": 5,
+        "_id": "f4c6e5b4-8b9f-7e0a-1d5e-4f2e6c8d0a1c"
+      }
+    ]
+  },
+  "threat_scenarios": [
+    {
+      "id": "TS001",
+      "name": "Tampering of ABS ECU Firmware",
+      "category": "Tampering",
+      "description": "Tampering occurred due to Loss of Integrity on ABS ECU Firmware.",
+      "damage_scenario": "[DS001] Firmware Tampering via UDS",
+      "cybersecurity_loss": "Loss of Integrity",
+      "asset": "ABS ECU Firmware",
+      "nodeId": "uds_interface",
+      "attack_tree": {
+        "goal": "Tampering of ABS ECU Firmware",
+        "gate": "OR",
+        "type": "surface_goal",
+        "children": [],
+        "error": "429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash-lite\nPlease retry in 44.606741751s. [links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash-lite\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerMinutePerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash-lite\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count\"\n  quota_id: \"GenerateContentInputTokensPerModelPerMinute-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash-lite\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\n, retry_delay {\n  seconds: 44\n}\n]"
+      }
+    },
+    {
+      "id": "TS002",
+      "name": "Denial of ABS ECU",
+      "category": "Denial",
+      "description": "Denial occurred due to Loss of Availability on ABS ECU.",
+      "damage_scenario": "[DS002] CAN Bus Message Injection",
+      "cybersecurity_loss": "Loss of Availability",
+      "asset": "ABS ECU",
+      "nodeId": "abs_ecu",
+      "attack_tree": {
+        "goal": "Denial of ABS ECU",
+        "gate": "OR",
+        "type": "surface_goal",
+        "children": [],
+        "error": "429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/rate-limit. \n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash-lite\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite\n* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash-lite\nPlease retry in 41.12482998s. [links {\n  description: \"Learn more about Gemini API quotas\"\n  url: \"https://ai.google.dev/gemini-api/docs/rate-limits\"\n}\n, violations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_input_token_count\"\n  quota_id: \"GenerateContentInputTokensPerModelPerMinute-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash-lite\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerMinutePerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash-lite\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\nviolations {\n  quota_metric: \"generativelanguage.googleapis.com/generate_content_free_tier_requests\"\n  quota_id: \"GenerateRequestsPerDayPerProjectPerModel-FreeTier\"\n  quota_dimensions {\n    key: \"model\"\n    value: \"gemini-2.0-flash-lite\"\n  }\n  quota_dimensions {\n    key: \"location\"\n    value: \"global\"\n  }\n}\n, retry_delay {\n  seconds: 41\n}\n]"
+      }
+    },
+    {
+      "id": "TS003",
+      "name": "Tampering of ABS Calibration Data",
+      "category": "Tampering",
+      "description": "Tampering occurred due to Loss of Integrity on ABS Calibration Data.",
+      "damage_scenario": "[DS003] User Data Corruption",
+      "cybersecurity_loss": "Loss of Integrity",
+      "asset": "ABS Calibration Data",
+      "nodeId": "brake_control_logic",
+      "attack_tree": {
+        "goal": "Tampering of ABS Calibration Data",
+        "gate": "OR",
+        "type": "surface_goal",
+        "children": [],
+        "error": "404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods."
+      }
+    },
+    {
+      "id": "TS004",
+      "name": "Information Disclosure of ABS ECU Debug Interface (JTAG/UART)",
+      "category": "Information Disclosure",
+      "description": "Information Disclosure occurred due to Loss of Confidentiality on ABS ECU Debug Interface (JTAG/UART).",
+      "damage_scenario": "[DS004] Physical Debug Port Access",
+      "cybersecurity_loss": "Loss of Confidentiality",
+      "asset": "ABS ECU Debug Interface (JTAG/UART)",
+      "nodeId": "abs_ecu",
+      "attack_tree": {
+        "goal": "Information Disclosure of ABS ECU Debug Interface (JTAG/UART)",
+        "gate": "OR",
+        "type": "surface_goal",
+        "children": [],
+        "error": "404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods."
+      }
+    },
+    {
+      "id": "TS005",
+      "name": "Tampering of Wheel Speed Sensor Signals",
+      "category": "Tampering",
+      "description": "Tampering occurred due to Loss of Integrity on Wheel Speed Sensor Signals.",
+      "damage_scenario": "[DS005] Spoofed Wheel Speed Sensor Data",
+      "cybersecurity_loss": "Loss of Integrity",
+      "asset": "Wheel Speed Sensor Signals",
+      "nodeId": "wheel_speed_sensors",
+      "attack_tree": {
+        "goal": "Tampering of Wheel Speed Sensor Signals",
+        "gate": "OR",
+        "type": "surface_goal",
+        "children": [],
+        "error": "404 models/gemini-1.5-flash-latest is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods."
+      }
+    }
+  ]
+}
