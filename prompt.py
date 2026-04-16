@@ -117,12 +117,19 @@ Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `
           "label": "System Name",
           "nodeCount": 5,
           "style": {
-            "background": "rgba(33,150,243,0.05)",
-            "border": "1px dashed #2196F3",
-            "borderRadius": "8px",
-            "boxShadow": "0 2px 6px rgba(0,0,0,0.1)",
-            "height": 510,
-            "width": 1041
+            "backgroundColor": "#dadada",
+            "borderColor": "gray",
+            "borderStyle": "solid",
+            "borderWidth": "2px",
+            "color": "black",
+            "fontFamily": "Inter",
+            "fontSize": "12px",
+            "fontStyle": "normal",
+            "fontWeight": 500,
+            "height": 60,
+            "textAlign": "center",
+            "textDecoration": "none",
+            "width": 150
           }
         },
         "position": {"x": 100, "y": 50},
@@ -229,8 +236,14 @@ Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `
       "desc": "Technical description of this component",
       "type": "default",
       "props": [
-        {"name": "Integrity", "id": "p-comp1-integ"},
-        {"name": "Confidentiality", "id": "p-comp1-conf"}
+        {
+          "name": "Integrity",
+          "id": "p-comp1-integ"
+        },
+        {
+          "name": "Confidentiality",
+          "id": "p-comp1-conf"
+        }
       ]
     },
     {
@@ -239,8 +252,14 @@ Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `
       "desc": "Description of second component",
       "type": "default",
       "props": [
-        {"name": "Integrity", "id": "p-comp2-integ"},
-        {"name": "Availability", "id": "p-comp2-avail"}
+        {
+          "name": "Integrity",
+          "id": "p-comp2-integ"
+        },
+        {
+          "name": "Availability",
+          "id": "p-comp2-avail"
+        }
       ]
     }
   ]
@@ -360,29 +379,70 @@ You MUST generate exactly one Detail entry per threat — do NOT skip any.
 Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `{`.
 
 {
-  "Details": [
+  "Damage_scenarios": [
     {
-      "_id": "dd-001",
-      "Name": "Descriptive damage scenario name",
-      "Description": "Detailed description of the damage and its safety/financial/operational consequences...",
-      "key": 1,
-      "cyberLosses": [
+      "_id": "698397514b57b8f24ed40a4b",
+      "model_id": "698397514b57b8f24ed40a43",
+      "type": "Derived",
+      "Derivations": [
         {
-          "id": "cl-001",
-          "name": "Integrity",
-          "node": "Component Name",
-          "nodeId": "<exact-node-id-from-architecture>",
-          "isSelected": true,
-          "is_risk_added": true
+          "task": "Check for DS due to the loss of Integrity for BatteryPack",
+          "name": "DS due to the loss of Integrity for BatteryPack",
+          "loss": "loss of Integrity",
+          "asset": false,
+          "damageScene": [],
+          "id": "DS001",
+          "nodeId": "<node-id-for-battery-pack>",
+          "is_checked": null
         }
       ],
-      "impacts": {
-        "Financial Impact": "Moderate",
-        "Safety Impact": "Major",
-        "Operational Impact": "Major",
-        "Privacy Impact": "Minor"
-      }
+      "Details": [
+        {
+          "nodeId": "<node-id-for-battery-pack>",
+          "name": "BatteryPack",
+          "desc": "Technical description",
+          "type": "default",
+          "props": [
+            { "name": "Integrity", "id": "p-bp-integ" },
+            { "name": "Confidentiality", "id": "p-bp-conf" },
+            { "name": "Authenticity", "id": "p-bp-auth" },
+            { "name": "Authorization", "id": "p-bp-author" },
+            { "name": "Availability", "id": "p-bp-avail" },
+            { "name": "Non-repudiation", "id": "p-bp-nonrep" }
+          ]
+        }
+      ]
+    },
+    {
+      "_id": "698397514b57b8f24ed40a4c",
+      "model_id": "698397514b57b8f24ed40a43",
+      "type": "User-defined",
+      "Details": [
+        {
+          "Description": "Detailed scenario analysis...",
+          "Name": "Short Scenario Name",
+          "cyberLosses": [
+            {
+              "id": "cl-unique-id",
+              "is_risk_added": true,
+              "name": "Integrity",
+              "isSelected": true,
+              "node": "Code Flash",
+              "nodeId": "<node-id-for-code-flash>"
+            }
+          ],
+          "impacts": {
+            "Financial Impact": "Severe",
+            "Safety Impact": "Severe",
+            "Operational Impact": "Severe",
+            "Privacy Impact": "Negligible"
+          },
+          "key": 1,
+          "_id": "dd-001"
+        }
+      ]
     }
   ]
 }
+
 """

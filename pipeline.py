@@ -377,8 +377,12 @@ def damage_scenario_node(state: RAGState):
         cleaned = re.sub(r"```$", "", cleaned.strip())
         damage_data = json.loads(cleaned)
         
-        # Flexibly find Details
-        details = damage_data.get("Details", damage_data.get("details", damage_data.get("damage_details", [])))
+        # Flexibly find Details or full structure
+        if "Damage_scenarios" in damage_data:
+            details = damage_data["Damage_scenarios"]
+        else:
+            details = damage_data.get("Details", damage_data.get("details", damage_data.get("damage_details", [])))
+            
         if not details and isinstance(damage_data, list):
             details = damage_data
             
@@ -413,20 +417,44 @@ def generate_threat_scenarios_node(state: RAGState):
     }
     
     ts_count = 1
-    for ds_index, ds in enumerate(damage_details):
-        ds_id = f"DS{ds_index+1:03}"
+    
+    # Flatten damage_details if it's the wrapped structure [Derived, User-defined]
+    flat_scenarios = []
+    if isinstance(damage_details, list):
+        for block in damage_details:
+            if not isinstance(block, dict): 
+                flat_scenarios.append(block)
+                continue
+                
+            btype = block.get("type", "")
+            if btype == "Derived":
+                # Scenarios are in 'Derivations'
+                flat_scenarios.extend(block.get("Derivations", []))
+            elif btype == "User-defined":
+                # Scenarios are in 'Details'
+                flat_scenarios.extend(block.get("Details", []))
+            else:
+                # Direct scenario object or other type
+                flat_scenarios.append(block)
+    
+    for ds_index, ds in enumerate(flat_scenarios):
+        # Determine ID based on whether it's an architectural derivation or user threat
+        ds_id = ds.get("id", ds.get("Name", f"DS{ds_index+1:03}"))
+        if not re.match(r"^DS\d+", str(ds_id)):
+             ds_id = f"DS{ds_index+1:03}"
+             
         ds_name = ds.get("Name", ds.get("name", "Unnamed Scenario"))
         
         # Fallback: if cyberLosses is missing, try to infer from the description/name
         losses = ds.get("cyberLosses", ds.get("cyberlosses", []))
         if not losses:
             # Smart Fallback: look for keywords
-            text = (ds_name + " " + ds.get("Description", "")).lower()
+            text = (str(ds_name) + " " + str(ds.get("Description", ds.get("task", "")))).lower()
             inferred = []
             for prop in stride_mapping.keys():
                 if prop.lower() in text:
-                    inferred.append({"name": prop, "node": "System", "nodeId": "unknown"})
-            losses = inferred if inferred else [{"name": "Integrity", "node": "System", "nodeId": "unknown"}]
+                    inferred.append({"name": prop, "node": "System", "nodeId": ds.get("nodeId", "unknown")})
+            losses = inferred if inferred else [{"name": "Integrity", "node": "System", "nodeId": ds.get("nodeId", "unknown")}]
 
         for loss in losses:
             loss_name = loss.get("name", loss.get("value", "Integrity"))
@@ -767,125 +795,129 @@ def evaluate(state: RAGState):
                     if not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', pid):
                         prop["id"] = str(uuid.uuid4())
 
-    # Helper: resolve old nodeId to new UUID using both ID and label maps
+    # ── DATA NORMALIZATION: Remap all state variables using the deep mapping ──
     def _remap(old_nid):
-        if not old_nid:
-            return old_nid
-        return node_id_map.get(old_nid,
-               label_id_map.get(old_nid,
-               label_id_map.get(str(old_nid).lower(),
-               old_nid)))
+        if not old_nid: return old_nid
+        return node_id_map.get(old_nid, label_id_map.get(old_nid, label_id_map.get(str(old_nid).lower(), old_nid)))
 
-    # Map all threat scenario nodeIds to new UUIDs
-    for ts in ts_list:
-         ts["nodeId"] = _remap(ts.get("nodeId"))
-
-    # Remap raw threats and merge impact data from damage analyst
+    # Process Threats (Raw)
     raw_threats = state.get("threats", [])
     raw_damage_details = state.get("damage_details", [])
     for i, t in enumerate(raw_threats):
         t["nodeId"] = _remap(t.get("nodeId"))
-        # Merge impact ratings from the corresponding damage detail
         if i < len(raw_damage_details):
-            dd = raw_damage_details[i]
-            impacts = dd.get("impacts", {})
-            t["financial_impact"] = impacts.get("Financial Impact", "Severe")
-            t["safety_impact"] = impacts.get("Safety Impact", "Severe")
-            t["operational_impact"] = impacts.get("Operational Impact", "Severe")
-            t["privacy_impact"] = impacts.get("Privacy Impact", "Negligible")
-            if dd.get("Description"):
-                t["description"] = dd["Description"]
-            # Also remap nodeIds inside cyberLosses from damage analyst
-            for cl in dd.get("cyberLosses", []):
-                cl["nodeId"] = _remap(cl.get("nodeId"))
-                # Pre-generate a stable UUID for cyberLoss id if missing
-                # This SAME id will be used in both Damage_scenarios[1] and Threat_scenarios
-                if not cl.get("id") or not re.match(r'^[0-9a-f]{8}-', str(cl.get("id", ""))):
-                    cl["id"] = str(uuid.uuid4())
+             dd = raw_damage_details[i]
+             if isinstance(dd, dict):
+                 impacts = dd.get("impacts", {})
+                 t["financial_impact"] = impacts.get("Financial Impact", "Severe")
+                 t["safety_impact"] = impacts.get("Safety Impact", "Severe")
+                 t["operational_impact"] = impacts.get("Operational Impact", "Severe")
+                 t["privacy_impact"] = impacts.get("Privacy Impact", "Negligible")
+                 if dd.get("Description"): t["description"] = dd["Description"]
 
-    # Remap nodeIds inside Threat_scenarios (built from un-remapped damage_details)
+    # Process Damage Details (Deep)
+    if isinstance(raw_damage_details, list):
+        for block in raw_damage_details:
+            if not isinstance(block, dict): continue
+            
+            # Recurse into nested structures if found
+            nested_items = []
+            if block.get("type") == "Derived": nested_items = block.get("Derivations", [])
+            elif block.get("type") == "User-defined": nested_items = block.get("Details", [])
+            else: nested_items = [block]
+            
+            for item in nested_items:
+                if not isinstance(item, dict): continue
+                if "nodeId" in item: item["nodeId"] = _remap(item["nodeId"])
+                for cl in item.get("cyberLosses", item.get("cyberlosses", [])):
+                    cl["nodeId"] = _remap(cl.get("nodeId"))
+                    if not cl.get("id") or not re.match(r'^[0-9a-f]{8}-', str(cl.get("id", ""))):
+                        cl["id"] = str(uuid.uuid4())
+
+    # Process Threat Scenarios (Automated)
     ts_scenarios = state.get("threat_scenarios", [])
     for ts in ts_scenarios:
         ts["nodeId"] = _remap(ts.get("nodeId"))
+        for p in ts.get("props", []):
+             if not p.get("id") or not re.match(r'^[0-9a-f]{8}-', str(p.get("id", ""))):
+                 p["id"] = str(uuid.uuid4())
+    # ── EXTRACT User-defined Scenarios for Assembly ──
+    # If LLM gave [Derived, User-defined], we only want the User-defined Details array.
+    user_defined_scenarios = []
+    if isinstance(raw_damage_details, list):
+        # Look for the block where type="User-defined"
+        user_block = next((b for b in raw_damage_details if isinstance(b, dict) and b.get("type") == "User-defined"), None)
+        if user_block:
+            user_defined_scenarios = user_block.get("Details", [])
+        else:
+            # Fallback: if it's just a list of scenarios (old format)
+            user_defined_scenarios = raw_damage_details
 
-    # Pre-process ALL damage details: remap nodeIds and pre-generate stable cyberLoss IDs
-    # This MUST happen before building both Damage_scenarios[1] and Threat_scenarios
-    # so they share the exact same IDs (verified requirement from bms_1.json)
-    for dd in raw_damage_details:
-        for cl in dd.get("cyberLosses", []):
-            cl["nodeId"] = _remap(cl.get("nodeId"))
-            # Generate stable UUID if missing or not a valid UUID
-            if not cl.get("id") or not re.match(r'^[0-9a-f]{8}-', str(cl.get("id", ""))):
-                cl["id"] = str(uuid.uuid4())
-
-    # NOW build threat_scenarios_details from raw_damage_details
-    # This ensures the prop IDs match cyberLosses in Damage_scenarios[1] 
-    # which is how the frontend connects them (verified against bms_1.json)
+    # NOW build threat_scenarios_details from ts_list (which is the most comprehensive source)
+    # Group ts_list by the damage scenario it references
     threat_scenarios_details = []
+    grouped_ts = {}
     
-    if raw_damage_details:
-        for dd_idx, dd in enumerate(raw_damage_details):
-            ds_id = f"DS{dd_idx+1:03}"
-            ds_name = dd.get("Name", f"Damage Scenario {ds_id}")
-            
-            # Group cyberLosses by nodeId (same node may have multiple props)
-            node_grouping = {}
-            for cl in dd.get("cyberLosses", []):
-                nid = _remap(cl.get("nodeId", ""))
-                node_name = cl.get("node", "Component")
-                if nid not in node_grouping:
-                    node_grouping[nid] = {
-                        "node": node_name,
-                        "nodeId": nid,
-                        "props": [],
-                        "name": ds_name  # Same name as the damage scenario
-                    }
-                # Use the SAME cyberLoss id so frontend can link them
-                node_grouping[nid]["props"].append({
-                    "id": cl.get("id", str(uuid.uuid4())),
-                    "is_risk_added": cl.get("is_risk_added", False),
-                    "name": cl.get("name", "Integrity"),
-                    "isSelected": cl.get("isSelected", True),
-                    "key": len(node_grouping[nid]["props"]) + 1
-                })
-            
-            if node_grouping:
-                threat_scenarios_details.append({
-                    "rowId": str(uuid.uuid4()),
-                    "id": ds_id,
-                    "Details": list(node_grouping.values())
-                })
-    else:
-        # Fallback: build from STRIDE-mapped ts_list if no damage details
-        grouped_ts = {}
-        for ts in ts_list:
-            ds_ref = ts.get("damage_scenario", "")
-            match = re.search(r"\[(DS\d+)\]", ds_ref)
-            ds_id = match.group(1) if match else "Global"
-            if ds_id not in grouped_ts:
-                grouped_ts[ds_id] = []
-            grouped_ts[ds_id].append(ts)
+    for ts in ts_scenarios:
+        ds_ref = ts.get("damage_scenario", "")
+        # Extract DSxxx from "[DSxxx] Name"
+        match = re.search(r"\[(DS\d+)\]", ds_ref)
+        ds_id = match.group(1) if match else "Global"
+        if ds_id not in grouped_ts:
+            grouped_ts[ds_id] = []
+        grouped_ts[ds_id].append(ts)
         
-        for ds_id, ts_items in grouped_ts.items():
-            node_grouping = {}
-            for ts in ts_items:
-                nid = _remap(ts.get("nodeId", ""))
-                if nid not in node_grouping:
-                    node_grouping[nid] = {
-                        "node": ts.get("node", "Component"),
-                        "nodeId": nid,
-                        "props": [],
-                        "name": ts.get("name", "Threat Scenario")
-                    }
-                for p in ts.get("props", []):
-                    p["key"] = len(node_grouping[nid]["props"]) + 1
-                    node_grouping[nid]["props"].append(p)
+    for ds_id, ts_items in grouped_ts.items():
+        # Group by nodeId to match bms_1.json structure
+        node_grouping = {}
+        ds_display_name = ""
+        
+        for ts in ts_items:
+            nid = _remap(ts.get("nodeId", ""))
+            # If still unknown, try fuzzy matching label to ID map inside the assembly
+            if nid == "unknown" or not nid:
+                label = ts.get("node", "")
+                nid = node_id_map.get(label, label_id_map.get(label, nid))
+                
+            node_name = ts.get("node", "Component")
+            if not ds_display_name:
+                # Use the descriptive name from the first threat in this group
+                ds_display_name = ts.get("name", "Threat Scenario").split(']')[-1].strip()
+                
+            if nid not in node_grouping:
+                node_grouping[nid] = {
+                    "node": node_name,
+                    "nodeId": nid,
+                    "props": [],
+                    "name": ds_display_name
+                }
             
+            # Map props and ensure IDs are stable and unique
+            for p in ts.get("props", []):
+                if isinstance(p, dict):
+                    p_name = p.get("name", "Integrity")
+                    # Check if this prop already exists for this node to avoid duplicates
+                    if not any(ep["name"] == p_name for ep in node_grouping[nid]["props"]):
+                        # Ensure property has a valid UUID
+                        pid = p.get("id", str(uuid.uuid4()))
+                        if not re.match(r'^[0-9a-f]{8}-', str(pid)):
+                            pid = str(uuid.uuid4())
+                            
+                        node_grouping[nid]["props"].append({
+                            "id": pid,
+                            "is_risk_added": p.get("is_risk_added", True),
+                            "name": p_name,
+                            "isSelected": p.get("isSelected", True),
+                            "key": len(node_grouping[nid]["props"]) + 1
+                        })
+        
+        if node_grouping:
             threat_scenarios_details.append({
                 "rowId": str(uuid.uuid4()),
                 "id": ds_id,
                 "Details": list(node_grouping.values())
             })
+    # (Removed redundant fallback as it is now integrated into primary threat assembly)
 
     # ── BUILD Assets[0].Details: node + edge property list (matches bms_1.json) ──
     # This is the CRITICAL structure the frontend expects.
@@ -934,6 +966,22 @@ def evaluate(state: RAGState):
             ds_counter += 1
 
     # ── BUILD final output matching bms_1.json golden schema ──
+    # 1. Finalize Assets: ensure field ordering and presence of Details
+    # (Requirement: _id, user_id, model_id must come BEFORE template)
+    reordered_assets = []
+    for asset in unified_assets:
+        ordered = {
+            "_id": asset.get("_id", str(uuid.uuid4())),
+            "user_id": asset.get("user_id", uid),
+            "model_id": asset.get("model_id", mid),
+            "template": asset.get("template", {"nodes": [], "edges": []}),
+            "Details": asset.get("Details", []),
+            "asset_name": asset.get("asset_name", None),
+            "asset_properties": asset.get("asset_properties", None)
+        }
+        reordered_assets.append(ordered)
+    unified_assets = reordered_assets
+
     final_output = {
         "Models": [
             {
@@ -943,7 +991,7 @@ def evaluate(state: RAGState):
                 "template": [],
                 "created_by": "prabhu.desai@gmail.com",
                 "Created_at": "2025-03-28T14:07:06.485Z",
-                "last_updated": "2025-03-28T14:07:06.485Z",
+                "last_updated": "2025-03-28T14:07:07Z",
                 "status": 1
             }
         ],
@@ -956,7 +1004,6 @@ def evaluate(state: RAGState):
                 "scenes": state.get("attacks", [])
             }
         ],
-        "Cybersecurity": [],
         "Damage_scenarios": [
             {
                 "_id": "698397514b57b8f24ed40a4b",
@@ -972,31 +1019,37 @@ def evaluate(state: RAGState):
                 "type": "User-defined",
                 "Details": [
                     {
-                        "Description": dd.get("Description", dd.get("Name", "")),
-                        "Name": dd.get("Name", f"Damage Scenario DS{i+1:03}"),
+                        "Description": dd.get("Description", dd.get("description", f"Potential impact analysis for {dd.get('Name', 'System')}")),
+                        "Name": dd.get("Name", dd.get("name", f"Damage Scenario DS{i+1:03}")),
                         "cyberLosses": [
                             {
                                 "id": cl.get("id", str(uuid.uuid4())),
-                                "is_risk_added": cl.get("is_risk_added", cl.get("name") in ["Integrity", "Authenticity"]),
+                                "is_risk_added": cl.get("is_risk_added", True),
                                 "name": cl.get("name", "Integrity"),
                                 "isSelected": cl.get("isSelected", True),
                                 "node": cl.get("node", "Component"),
                                 "nodeId": _remap(cl.get("nodeId", ""))
-                            } for cl in dd.get("cyberLosses", [{
+                            } for cl in dd.get("cyberLosses", dd.get("cyberlosses", []))
+                        ] if (dd.get("cyberLosses") or dd.get("cyberlosses")) else [
+                            {
+                                "id": str(uuid.uuid4()),
+                                "is_risk_added": True,
                                 "name": "Integrity",
-                                "node": "Component",
-                                "nodeId": ""
-                            }])
+                                "isSelected": True,
+                                "node": "System",
+                                "nodeId": "unknown"
+                            }
                         ],
-                        "impacts": dd.get("impacts", {
-                            "Financial Impact": "Severe",
-                            "Safety Impact": "Severe",
-                            "Operational Impact": "Severe",
-                            "Privacy Impact": "Negligible"
-                        }),
-                        "key": i + 1
-                    } for i, dd in enumerate(raw_damage_details)
-                ] if raw_damage_details else [
+                        "impacts": {
+                            "Financial Impact": dd.get("impacts", {}).get("Financial Impact", "Severe"),
+                            "Safety Impact": dd.get("impacts", {}).get("Safety Impact", "Severe"),
+                            "Operational Impact": dd.get("impacts", {}).get("Operational Impact", "Severe"),
+                            "Privacy Impact": dd.get("impacts", {}).get("Privacy Impact", "Negligible")
+                        },
+                        "key": i + 1,
+                        "_id": dd.get("_id", str(uuid.uuid4()))
+                    } for i, dd in enumerate(user_defined_scenarios)
+                ] if user_defined_scenarios else [
                     {
                         "Description": t.get("description", t.get("name", "")),
                         "Name": t.get("name", f"Damage Scenario DS{i+1:03}"),
@@ -1014,13 +1067,13 @@ def evaluate(state: RAGState):
                             "Operational Impact": t.get("operational_impact", "Severe"),
                             "Privacy Impact": t.get("privacy_impact", "Negligible")
                         },
-                        "key": i + 1
+                        "key": i + 1,
+                        "_id": str(uuid.uuid4())
                     } for i, t in enumerate(raw_threats)
                 ],
                 "user_id": uid
             }
         ],
-        "Risk_treatment": [],
         "Threat_scenarios": [
             {
                 "_id": "698397514b57b8f24ed40a4e",
@@ -1031,6 +1084,8 @@ def evaluate(state: RAGState):
             }
         ]
     }
+
+    # (Details are now preserved in Assets as requested)
 
     # Post-processing to link rowId in Attacks
     try:

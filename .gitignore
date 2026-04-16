@@ -11,6 +11,7 @@ dist/
 
 # Project Specific
 cache/
+outputs/
 .gemini/
 .antigravity/
 
