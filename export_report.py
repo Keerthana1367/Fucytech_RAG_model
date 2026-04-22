@@ -154,7 +154,7 @@ def generate_pdf(tara_json, query, output_path):
         [Paragraph("Field", table_header), Paragraph("Value", table_header)],
         ["ECU Name", query],
         ["ECU Type", "Automotive Controller"],
-        ["Vehicle System", "High Voltage System" if "BMS" in query else "Chassis System"],
+        ["Vehicle System", "In-Vehicle Electronic System"],
         ["Functions", "Critical control, monitoring and diagnostic services."],
         ["Interfaces", "CAN, Diagnostic (UDS)"],
         ["Environment", "Automotive In-Vehicle Network (IVN)"]

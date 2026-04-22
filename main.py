@@ -62,7 +62,8 @@ def main():
     ecu_entry = resolve_ecu(user_query)
 
     if ecu_entry:
-        print(f"  [Success] Matched : {ecu_entry['name']}")
+        name = ecu_entry.get("name") or ecu_entry.get("id", "Unknown")
+        print(f"  [Success] Matched : {name}")
     else:
         print("  [Warning] No match found")
 

@@ -12,8 +12,8 @@ from google.api_core.exceptions import ResourceExhausted
 from cache_manager import save_cache, load_cache
 import time
 
-from components import build_store, build_retriever, build_generator
-from config import RETRIEVER_TOP_K
+from components import build_store, build_retriever, build_generator, build_ranker
+from config import RETRIEVER_TOP_K, TOP_K_RANKER
 from prompt import TARA_PROMPT_TEMPLATE
 
 # ── GLOBAL CONFIGURATION (Change these to adjust output depth) ───────────────
@@ -46,7 +46,8 @@ def setup(all_docs):
     store, text_embedder = build_store(all_docs)
     retriever = build_retriever(store)
     generator = build_generator()
-    return retriever, generator, text_embedder
+    ranker = build_ranker()
+    return retriever, generator, text_embedder, ranker
 
 def safe_generate(prompt: str, role_name: str = "Agent"):
     """Thin wrapper to handle Gemini free-tier rate limits with auto-sleep and deep retries."""
@@ -186,12 +187,17 @@ def _bump_retry(state: RAGState):
     return reset_state
 
 def retrieve(state: RAGState):
-    """Retrieves relevant documents using the Haystack retriever."""
+    """Retrieves relevant documents and re-ranks them for precision."""
     query = state.get("enriched_query") or state.get("user_query")
+    print(f"  🔍 Retrieving top {RETRIEVER_TOP_K} candidate chunks...")
     embedding = text_embedder.run(text=query)["embedding"]
     result = retriever.run(query_embedding=embedding)
-    # Safety: ensure we don't pass massive content if context is bloated
-    docs = result["documents"][:RETRIEVER_TOP_K]
+    raw_docs = result["documents"][:RETRIEVER_TOP_K]
+    
+    print(f"  🎯 Re-ranking to the best {TOP_K_RANKER} matches...")
+    rank_res = ranker.run(query=query, documents=raw_docs)
+    docs = rank_res["documents"]
+    
     return {"documents": docs}
 
 def architect_node(state: RAGState):
@@ -1146,8 +1152,8 @@ def evaluate(state: RAGState):
 
 # ---------------- BUILD GRAPH ----------------
 def build_graph(all_docs):
-    global retriever, generator, text_embedder
-    retriever, generator, text_embedder = setup(all_docs)
+    global retriever, generator, text_embedder, ranker
+    retriever, generator, text_embedder, ranker = setup(all_docs)
 
     builder = StateGraph(RAGState)
 

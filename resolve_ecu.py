@@ -52,65 +52,53 @@ def _acronym(text: str) -> str:
 # ---------------------------------------------------------------------------
 
 def resolve_ecu(query: str, ecu_path=None) -> dict | None:
-    """
-    Fuzzy-match query against dataecu.json keys and names.
-
-    Matching order:
-      0. Alias table (well-known abbreviations / phrases)
-      1. Exact key or key as standalone word in query
-      2. Full entry name is substring of query
-      3a. Exact acronym match
-      3b. Acronym starts key (within 1 extra char)
-      4. Significant name-word overlap (>= 2 shared core words)
-      5. Any key word > 3 chars appears in query
-
-    Returns matched entry dict {name, type, hint} or None.
-    """
+    """Fuzzy-match query against dataecu.json (supports both old and new V5 formats)."""
     ecu_path = ecu_path or config.ECU_PATH
     with open(ecu_path, "r", encoding="utf-8") as f:
-        ecu_db = json.load(f)
+        data = json.load(f)
+    
+    # Handle New V5 structure (List under 'ecus') or Old structure (Dict of ECUs)
+    if isinstance(data, dict) and "ecus" in data:
+        ecu_db_list = data["ecus"]
+    elif isinstance(data, dict):
+        # Convert old dict structure to list for unified processing
+        ecu_db_list = []
+        for k, v in data.items():
+            if k == "metadata": continue
+            v["id"] = k
+            ecu_db_list.append(v)
+    else:
+        ecu_db_list = data # Assume it's a list already
 
     q = query.lower().strip()
 
     # Pass 0: alias table
-    for phrase, key in _ALIASES.items():
-        if phrase in q and key in ecu_db:
-            return ecu_db[key]
+    for phrase, alias_key in _ALIASES.items():
+        if phrase in q:
+            for entry in ecu_db_list:
+                if str(entry.get("id")).lower() == alias_key:
+                    return entry
 
-    # Pass 1: exact key or key as standalone word
-    for key, entry in ecu_db.items():
-        if key == q or f" {key} " in f" {q} ":
+    # Pass 1: exact ID or name match
+    for entry in ecu_db_list:
+        eid = str(entry.get("id", "")).lower()
+        ename = str(entry.get("name", eid)).lower()
+        if eid == q or ename == q or f" {eid} " in f" {q} " or f" {ename} " in f" {q} ":
             return entry
 
-    # Pass 2: full entry name substring
-    for key, entry in ecu_db.items():
-        if entry["name"].lower() in q:
-            return entry
-
-    # Pass 3a: exact acronym match
-    query_acronym = _acronym(q)
-    for key, entry in ecu_db.items():
-        if query_acronym and query_acronym == key:
-            return entry
-
-    # Pass 3b: acronym starts key (within 1 extra char)
-    if len(query_acronym) >= 2:
-        for key, entry in ecu_db.items():
-            if key.startswith(query_acronym) and len(key) - len(query_acronym) <= 1:
+    # Pass 2: acronym match
+    qa = _acronym(q)
+    if qa:
+        for entry in ecu_db_list:
+            eid = str(entry.get("id", "")).lower()
+            if qa == eid:
                 return entry
 
-    # Pass 4: significant name-word overlap
-    for key, entry in ecu_db.items():
-        name_words = [w.strip("()/-").lower()
-                      for w in entry["name"].replace("/", " ").split()]
-        core_name  = [w for w in name_words if len(w) > 2 and w not in _SUFFIX_WORDS]
-        if sum(1 for w in core_name if w in q) >= 2:
-            return entry
-
-    # Pass 5: any key word > 3 chars in query
-    for key, entry in ecu_db.items():
-        key_words = key.replace("_", " ").split()
-        if any(w in q for w in key_words if len(w) > 3):
+    # Pass 3: fuzzy name/id overlap
+    for entry in ecu_db_list:
+        eid = str(entry.get("id", "")).lower()
+        ename = str(entry.get("name", eid)).lower()
+        if eid in q or ename in q:
             return entry
 
     return None

@@ -12,6 +12,7 @@ from haystack.components.embedders import (
     SentenceTransformersDocumentEmbedder,
     SentenceTransformersTextEmbedder,
 )
+from haystack.components.rankers import SentenceTransformersSimilarityRanker
 from haystack.document_stores.types import DuplicatePolicy
 from haystack.utils import Secret
 from haystack_integrations.document_stores.weaviate import WeaviateDocumentStore
@@ -26,7 +27,8 @@ from config import (
     EMBED_MODEL, MAX_CHARS, GEMINI_MODEL, RETRIEVER_TOP_K,
     WEAVIATE_URL, WEAVIATE_API_KEY, WEAVIATE_COLLECTION,
     MITRE_MOBILE, MITRE_ICS, ATM_PATH, CAPEC_PATH, CWE_PATH,
-    ECU_PATH, ANNEX_PATH, CLAUSE_PATH, REPORTS_PATH, PDF_PATH
+    ECU_PATH, ANNEX_PATH, CLAUSE_PATH, REPORTS_PATH, PDF_PATH,
+    RANKER_MODEL, TOP_K_RANKER
 )
 
 
@@ -66,68 +68,105 @@ def _acronym(text: str) -> str:
 
 
 def resolve_ecu(query: str, ecu_path=None) -> dict | None:
-    """5-pass fuzzy-match query to a dataecu.json entry. Returns entry dict or None."""
+    """Fuzzy-match query against dataecu.json (supports both old and new V5 formats)."""
     ecu_path = ecu_path or ECU_PATH
     with open(ecu_path, "r", encoding="utf-8") as f:
-        ecu_db = json.load(f)
+        data = json.load(f)
+    
+    # Handle New V5 structure (List under 'ecus') or Old structure (Dict of ECUs)
+    if isinstance(data, dict) and "ecus" in data:
+        ecu_db_list = data["ecus"]
+    elif isinstance(data, dict):
+        # Convert old dict structure to list for unified processing
+        ecu_db_list = []
+        for k, v in data.items():
+            if k == "metadata": continue
+            v["id"] = k
+            ecu_db_list.append(v)
+    else:
+        ecu_db_list = data # Assume it's a list already
+
     q = query.lower().strip()
 
     # Pass 0: alias table
-    for phrase, key in _ALIASES.items():
-        if phrase in q and key in ecu_db:
-            return ecu_db[key]
-    # Pass 1: exact key or standalone word
-    for key, entry in ecu_db.items():
-        if key == q or f" {key} " in f" {q} ":
+    for phrase, alias_key in _ALIASES.items():
+        if phrase in q:
+            for entry in ecu_db_list:
+                if str(entry.get("id")).lower() == alias_key:
+                    return entry
+
+    # Pass 1: exact ID or name match
+    for entry in ecu_db_list:
+        eid = str(entry.get("id", "")).lower()
+        ename = str(entry.get("name", eid)).lower()
+        if eid == q or ename == q or f" {eid} " in f" {q} " or f" {ename} " in f" {q} ":
             return entry
-    # Pass 2: full name substring
-    for key, entry in ecu_db.items():
-        if entry["name"].lower() in q:
-            return entry
-    # Pass 3a: exact acronym
+
+    # Pass 2: acronym match
     qa = _acronym(q)
-    for key, entry in ecu_db.items():
-        if qa and qa == key:
-            return entry
-    # Pass 3b: acronym prefix
-    if len(qa) >= 2:
-        for key, entry in ecu_db.items():
-            if key.startswith(qa) and len(key) - len(qa) <= 1:
+    if qa:
+        for entry in ecu_db_list:
+            eid = str(entry.get("id", "")).lower()
+            if qa == eid:
                 return entry
-    # Pass 4: word overlap
-    for key, entry in ecu_db.items():
-        name_words = [w.strip("()/-").lower() for w in entry["name"].replace("/", " ").split()]
-        core       = [w for w in name_words if len(w) > 2 and w not in _SUFFIX_WORDS]
-        if sum(1 for w in core if w in q) >= 2:
+
+    # Pass 3: fuzzy name/id overlap
+    for entry in ecu_db_list:
+        eid = str(entry.get("id", "")).lower()
+        ename = str(entry.get("name", eid)).lower()
+        if eid in q or ename in q:
             return entry
-    # Pass 5: key word in query
-    for key, entry in ecu_db.items():
-        if any(w in q for w in key.replace("_", " ").split() if len(w) > 3):
-            return entry
+
     return None
 
 
 def list_ecus(ecu_path=None) -> None:
-    """Print all ECU keys and names from dataecu.json."""
+    """Print all ECU keys and names from dataecu.json (V5)."""
     ecu_path = ecu_path or ECU_PATH
     with open(ecu_path, "r", encoding="utf-8") as f:
-        ecu_db = json.load(f)
-    print(f"\n{'Key':<20} {'Name'}")
+        data = json.load(f)
+    
+    if isinstance(data, dict) and "ecus" in data:
+        ecu_db_list = data["ecus"]
+    elif isinstance(data, dict):
+        ecu_db_list = [{"id": k, **v} for k, v in data.items() if k != "metadata"]
+    else:
+        ecu_db_list = data
+
+    print(f"\n{'ID':<20} {'Name/Type'}")
     print("-" * 60)
-    for key, entry in ecu_db.items():
-        print(f"  {key:<18} {entry.get('name', '')}")
-    print(f"\nTotal: {len(ecu_db)} ECU entries")
+    for entry in ecu_db_list:
+        eid = entry.get("id", "??")
+        ename = entry.get("name") or entry.get("type", "ECU")
+        print(f"  {eid:<18} {ename}")
+    print(f"\nTotal: {len(ecu_db_list)} ECU entries")
 
 
 def build_enriched_query(user_query: str, ecu_entry: dict | None) -> str:
     if ecu_entry:
+        name = ecu_entry.get("name") or ecu_entry.get("id", "Unknown ECU")
+        
+        # Build dynamic hints from structured V5 data
+        hardware = ecu_entry.get("hardware", {})
+        mcu = hardware.get("mcu", "Standard MCU")
+        sensors = ", ".join(hardware.get("sensors", []))
+        interfaces = ", ".join(hardware.get("interfaces", []))
+        
+        assets = []
+        for a in ecu_entry.get("assets", []):
+            if isinstance(a, dict):
+                assets.append(f"{a.get('id')} ({a.get('type')})")
+            else:
+                assets.append(str(a))
+        
+        hint = ecu_entry.get("hint")
+        if not hint:
+            hint = f"Hardware: {mcu}. Interfaces: {interfaces}. Sensors: {sensors}. Assets: {', '.join(assets)}."
+
         return (
-            f"{ecu_entry['name']}\n\n"
-            f"AUTHORITATIVE ASSET LIST (from system dataecu specification) — "
-            f"generate ONLY these assets, no others:\n"
-            f"{ecu_entry['hint']}\n\n"
-            f"All threat analysis, damage scenarios, and edges must reference "
-            f"ONLY the assets listed above. Do NOT add any other components."
+            f"Target System: {name}\n\n"
+            f"AUTHORITATIVE ASSET LIST & HINTS: {hint}\n\n"
+            f"All threat analysis and damage scenarios must reference the components above."
         )
     return user_query
 
@@ -147,7 +186,7 @@ def _hex_id(base=None, inc=0):
     return _uuid.uuid4().hex[:24]
 
 def stamp_uuids(obj: dict) -> dict:
-    """Replace placeholder IDs with BMS-compliant hex IDs and follow sequential logic."""
+    """Replace placeholder IDs with industry-standard hex IDs and follow sequential logic."""
     
     # 1. Handle top-level entities with precise hex offsets
     models = obj.get("Models", [])
@@ -169,7 +208,7 @@ def stamp_uuids(obj: dict) -> dict:
         mid = model0["_id"]
         uid = model0["user_id"]
         
-        # Apply offsets (Matching bms_1.json logic: Asset +1, Attack +2, DS +8, TS +11)
+        # Apply offsets (Matching reference golden schema logic: Asset +1, Attack +2, DS +8, TS +11)
         # Note: offsets are approximate based on user's reference file
         for asset in assets:
             if not asset.get("_id") or "uuid" in str(asset.get("_id")):
@@ -350,7 +389,7 @@ def print_summary(tara_json: dict) -> None:
     print(f"   Edges          : {len(edges)}")
     print(f"   Architecture Details : {len(details)}")
     print(f"   Damage Scenarios : {len(ds_root.get('Details', []))}")
-    print("   IDs            : stamped as BMS-compliant hex IDs")
+    print("   IDs            : stamped as compliant hex IDs")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -411,3 +450,8 @@ def build_generator():
             "   Linux   : export GOOGLE_API_KEY=your-key-here"
         )
     return GoogleAIGeminiGenerator(model=GEMINI_MODEL)
+    
+def build_ranker():
+    ranker = SentenceTransformersSimilarityRanker(model=RANKER_MODEL, top_k=TOP_K_RANKER)
+    ranker.warm_up()
+    return ranker

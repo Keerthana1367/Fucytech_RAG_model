@@ -29,6 +29,12 @@ EMBED_MODEL = "BAAI/bge-small-en-v1.5"
 # Fallback: "sentence-transformers/all-MiniLM-L6-v2"
 
 # ---------------------------------------------------------------------------
+# Re-ranking (Cross-Encoder)
+# ---------------------------------------------------------------------------
+RANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+TOP_K_RANKER = 10
+
+# ---------------------------------------------------------------------------
 # Chunking
 # ---------------------------------------------------------------------------
 MAX_CHARS = 1500   # max chars per chunk for threat-framework entries
@@ -41,7 +47,7 @@ GEMINI_MODEL = "gemini-2.5-flash-lite"
 # ---------------------------------------------------------------------------
 # Retrieval
 # ---------------------------------------------------------------------------
-RETRIEVER_TOP_K = 50  # Raised to 50 for maximum technical coverage
+RETRIEVER_TOP_K = 50  # Coverage
 
 # ---------------------------------------------------------------------------
 # Vector DB (Weaviate)

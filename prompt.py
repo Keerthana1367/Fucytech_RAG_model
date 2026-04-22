@@ -54,8 +54,8 @@ Design a professional-grade system architecture for "{{ question }}" with exactl
 ### ARCHITECTURE RULES:
 
 1. **HIERARCHY & REQUIRED COMPONENTS** — Use group containers and specific components:
-   - For a Battery Management System (BMS), you MUST include the following components based strictly on ISO 21434 reference models: `BatteryPack`, `CellMonitoring`, `IO and Analog`, `Code Flash`, `Data Flash`, `Keys`, `Certificates`, `CAN Transceiver`, `Debug Port`, `ICD Shunt CAN`, `Vehicle System`, `Cloud`.
-   - You MUST include `SoC` (State of Charge) and `SoH` (State of Health) as explicit components using `type: "data"`.
+   - For the target system, you must include ALL components and interfaces listed in the provided REFERENCE CONTEXT and ECU HINTS.
+   - You MUST include relevant data nodes (e.g. `SoC`, `SoH` for battery systems, or `Speed`, `Angle` for control systems) as explicit components using `type: "data"`.
    - `type:"group"` nodes are invisible containers (dashed border, no solid backgroundColor).
    - The top-level system group has `"parentId": null`.
    - Sub-system groups nest inside the top-level group via `parentId`.
@@ -63,7 +63,7 @@ Design a professional-grade system architecture for "{{ question }}" with exactl
    - External entities (Vehicle System, Cloud) have `"parentId": null`.
 
 2. **NODE IDs** — Use short, stable, lowercase, hyphenated strings:
-   CORRECT: `"bms-cellmonitor"`, `"bms-mcu-group"`, `"ext-vehicle"`
+   CORRECT: `"ecu-mcu-group"`, `"sensor-input"`, `"ext-interface"`
    WRONG:   UUIDs, bare numbers like "1", or labels with spaces.
    The pipeline will assign final UUIDs later — your IDs are for cross-referencing only.
 
@@ -73,8 +73,8 @@ Design a professional-grade system architecture for "{{ question }}" with exactl
    - `"data"`: Small data items (SoC, SoH). Size: width=50, height=30.
 
 4. **EDGES** — Short protocol labels ONLY:
-   - For a Battery Management System (BMS), you MUST include edges connecting the interfaces to `BatteryPack` (e.g., `CellMonitoring` -> `BatteryPack`, `IO and Analog` -> `BatteryPack`, `ICD Shunt CAN` -> `BatteryPack`).
-   - You MUST include edges between the core MCU Group and components like `CellMonitoring`, `IO and Analog`, and `CAN Transceiver`.
+   - You MUST include edges connecting the interfaces to their primary controller or data destination (e.g. `Sensor` -> `MCU`, `MCU` -> `Transceiver`).
+   - You MUST include edges between internal groups and their respective components.
    - CORRECT: `"SPI"`, `"CAN1"`, `"CAN2"`, `"IO_PINS"`, `"Vehicle CAN"`, `"UART"`
    - WRONG:   `"Sends data to"`, `"Controls power"`, `"CAN Communication"`
    - Every `source` and `target` MUST match a defined node `id`.
@@ -175,7 +175,9 @@ Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `
         "style": {"height": 60, "width": 150},
         "dragging": false,
         "resizing": false,
-        "selected": false
+        "selected": false,
+        "zIndex": 0
+
       },
       {
         "id": "comp-two",
@@ -209,7 +211,8 @@ Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `
         "style": {"height": 60, "width": 150},
         "dragging": false,
         "resizing": false,
-        "selected": false
+        "selected": false,
+        "zIndex": 0
       }
     ],
     "edges": [
@@ -292,7 +295,7 @@ Generate exactly {{ max_threats }} high-priority technical threats, each targeti
 ### THREAT DISCOVERY RULES:
 
 1. **PIN TO NODE**: Each threat's `nodeId` MUST be the EXACT `id` value of a node from the architecture JSON above.
-   Example: If a node has `"id": "bms-cellmonitor"`, use `"nodeId": "bms-cellmonitor"`.
+   Example: If a node has `"id": "sensor-input"`, use `"nodeId": "sensor-input"`.
    Do NOT use the label, a UUID, or any invented string.
 
 2. **SPREAD**: Target DIFFERENT nodes. Do not cluster all threats on one component.
@@ -386,13 +389,8 @@ Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `
       "type": "Derived",
       "Derivations": [
         {
-          "task": "Check for DS due to the loss of Integrity for BatteryPack",
-          "name": "DS due to the loss of Integrity for BatteryPack",
-          "loss": "loss of Integrity",
-          "asset": false,
-          "damageScene": [],
           "id": "DS001",
-          "nodeId": "<node-id-for-battery-pack>",
+          "nodeId": "<exact-node-id-from-architecture>",
           "is_checked": null
         }
       ],
