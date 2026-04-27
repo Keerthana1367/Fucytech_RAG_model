@@ -18,6 +18,7 @@ from components import (
 )
 from ingest import load_all_documents
 from pipeline import build_graph
+from export_report import generate_pdf, generate_markdown
 
 
 
@@ -116,10 +117,12 @@ def main():
         outputs_dir = Path(__file__).parent / "outputs"
         prompts_dir = outputs_dir / "prompts"
         tara_dir    = outputs_dir / "Results"
+        reports_dir = outputs_dir / "Reports"
         eval_dir    = outputs_dir / "langgraph_evaluation_results"
         
         prompts_dir.mkdir(parents=True, exist_ok=True)
         tara_dir.mkdir(parents=True, exist_ok=True)
+        reports_dir.mkdir(parents=True, exist_ok=True)
         eval_dir.mkdir(parents=True, exist_ok=True)
 
         # 1. Save Full Prompt for Debugging
@@ -144,6 +147,23 @@ def main():
         with open(out_path, "w", encoding="utf-8") as f:
             json.dump(tara_json, f, indent=2, ensure_ascii=False)
         print(f"[Success] TARA Saved -> {out_path}")
+
+        # ── NEW: Generate Professional PDF Report ────────────────────────
+        print(f"\n[Export] Generating professional PDF report...")
+        pdf_path = reports_dir / f"TARA_Report_{safe_name}.pdf"
+        try:
+            if generate_pdf(tara_json, user_query, str(pdf_path)):
+                print(f"  [Success] PDF Report -> {pdf_path}")
+        except Exception as e:
+            print(f"  [Error] PDF generation failed: {e}")
+
+        # ── NEW: Generate Markdown Knowledge for RAG ─────────────────────
+        md_dir = Path(__file__).parent / "datasets" / "reports_db"
+        md_dir.mkdir(parents=True, exist_ok=True)
+        md_path = md_dir / f"knowledge_{safe_name}.md"
+        with open(md_path, "w", encoding="utf-8") as f:
+            f.write(generate_markdown(tara_json, user_query))
+        print(f"  [Success] Knowledge MD -> {md_path}")
 
         # 3. Save Evaluation Results
         eval_details = result.get("eval_details", {})

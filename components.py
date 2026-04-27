@@ -27,7 +27,7 @@ from config import (
     EMBED_MODEL, MAX_CHARS, GEMINI_MODEL, RETRIEVER_TOP_K,
     WEAVIATE_URL, WEAVIATE_API_KEY, WEAVIATE_COLLECTION,
     MITRE_MOBILE, MITRE_ICS, ATM_PATH, CAPEC_PATH, CWE_PATH,
-    ECU_PATH, ANNEX_PATH, CLAUSE_PATH, REPORTS_PATH, PDF_PATH,
+    ECU_PATH, ANNEX_PATH, CLAUSE_PATH, REPORTS_PATH, SECURITY_KB_PATH, PDF_PATH,
     RANKER_MODEL, TOP_K_RANKER
 )
 
@@ -46,15 +46,15 @@ _ALIASES = {
     "obd":               "obd",
     "obd-ii":            "obd",
     "obd2":              "obd",
-    "tcu":               "tcu",
     "telematics control":"tcu",
-    "bcm":               "bcm",
-    "ecm":               "ecm",
-    "ivi":               "ivi",
-    "eps":               "eps",
-    "abs":               "abs",
-    "bms":               "bms",
-    "adas":              "adas",
+    "body Control Module": "bcm",
+    "Engine Control Module": "ecm",
+    "In-Vehicle Infotainment":   "ivi",
+    "Electric Power Steering": "eps",
+    "Anti-lock Braking System": "abs",
+    "Battery Management System": "bms",
+    "Advanced Driver-Assistance Systems": "adas",
+    "Telematics Control Unit": "tcu",
 }
 
 
@@ -175,20 +175,10 @@ def build_enriched_query(user_query: str, ecu_entry: dict | None) -> str:
 # POST-PROCESSING
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _hex_id(base=None, inc=0):
-    """Generates a 24-char hex ID. If base is provided, increments it."""
-    if base and len(base) >= 24:
-        # Simple hex increment for the last part
-        prefix = base[:-2]
-        val = int(base[-2:], 16) + inc
-        return f"{prefix}{val:02x}"
-    # Generate fresh 24-char hex
-    return _uuid.uuid4().hex[:24]
-
 def stamp_uuids(obj: dict) -> dict:
-    """Replace placeholder IDs with industry-standard hex IDs and follow sequential logic."""
+    """Replace placeholder IDs with industry-standard UUIDs."""
     
-    # 1. Handle top-level entities with precise hex offsets
+    # 1. Handle top-level entities
     models = obj.get("Models", [])
     assets = obj.get("Assets", [])
     attacks = obj.get("Attacks", [])
@@ -198,54 +188,52 @@ def stamp_uuids(obj: dict) -> dict:
     mid = None
     uid = None
 
-    if models and isinstance(models, list):
+    if models and isinstance(models, list) and len(models) > 0:
         model0 = models[0]
-        if not model0.get("_id") or "uuid" in str(model0.get("_id")):
-            model0["_id"] = _hex_id()
-        if not model0.get("user_id") or "uuid" in str(model0.get("user_id")):
-            model0["user_id"] = _hex_id()
+        if not model0.get("_id") or "uuid" in str(model0.get("_id")).lower() or len(str(model0.get("_id"))) < 24:
+            model0["_id"] = str(_uuid.uuid4())
+        if not model0.get("user_id") or "uuid" in str(model0.get("user_id")).lower() or len(str(model0.get("user_id"))) < 24:
+            model0["user_id"] = str(_uuid.uuid4())
             
         mid = model0["_id"]
         uid = model0["user_id"]
         
-        # Apply offsets (Matching reference golden schema logic: Asset +1, Attack +2, DS +8, TS +11)
-        # Note: offsets are approximate based on user's reference file
         for asset in assets:
-            if not asset.get("_id") or "uuid" in str(asset.get("_id")):
-                asset["_id"] = _hex_id(mid, 1)
+            if not asset.get("_id") or "uuid" in str(asset.get("_id")).lower() or len(str(asset.get("_id"))) < 24:
+                asset["_id"] = str(_uuid.uuid4())
             asset["model_id"] = mid
             asset["user_id"] = uid
             
         for attack in attacks:
-            if not attack.get("_id") or "uuid" in str(attack.get("_id")):
-                attack["_id"] = _hex_id(mid, 2)
+            if not attack.get("_id") or "uuid" in str(attack.get("_id")).lower() or len(str(attack.get("_id"))) < 24:
+                attack["_id"] = str(_uuid.uuid4())
             attack["model_id"] = mid
 
         for ds in ds_list:
-            if not ds.get("_id") or "uuid" in str(ds.get("_id")):
-                ds["_id"] = _hex_id(mid, 8)
+            if not ds.get("_id") or "uuid" in str(ds.get("_id")).lower() or len(str(ds.get("_id"))) < 24:
+                ds["_id"] = str(_uuid.uuid4())
             ds["model_id"] = mid
             if "user_id" not in ds: ds["user_id"] = uid
 
         for ts in ts_list:
-            if not ts.get("_id") or "uuid" in str(ts.get("_id")):
-                ts["_id"] = _hex_id(mid, 11)
+            if not ts.get("_id") or "uuid" in str(ts.get("_id")).lower() or len(str(ts.get("_id"))) < 24:
+                ts["_id"] = str(_uuid.uuid4())
             ts["model_id"] = mid
 
     # 2. General walk for internal IDs
     ID_KEYS = {"id", "_id", "parentId", "source", "target", "nodeId", "rowId", "propId", "threat_id", "ID"}
     
-    def _bad(val):
+    def _is_bad(val):
         if not val: return True
-        if isinstance(val, str) and ("PLACEHOLDER" in val or val.strip() == "" or val.startswith("<")):
-            return True
-        return False
+        if not isinstance(val, str): return False
+        # If it's a placeholder or not a valid UUID format
+        is_uuid = re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', val.lower())
+        return not is_uuid or "PLACEHOLDER" in val or val.strip() == "" or val.startswith("<")
 
-    # For everything else, use standard UUID
     def _walk(o):
         if isinstance(o, dict):
             for k, v in list(o.items()):
-                if k in ID_KEYS and _bad(v):
+                if k in ID_KEYS and _is_bad(v):
                     o[k] = str(_uuid.uuid4())
                 else:
                     _walk(v)
@@ -389,7 +377,7 @@ def print_summary(tara_json: dict) -> None:
     print(f"   Edges          : {len(edges)}")
     print(f"   Architecture Details : {len(details)}")
     print(f"   Damage Scenarios : {len(ds_root.get('Details', []))}")
-    print("   IDs            : stamped as compliant hex IDs")
+    print("   IDs            : all stamped as uuid4")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -402,7 +390,11 @@ def build_store(all_docs=None):
         url=WEAVIATE_URL,
         auth_client_secret=AuthApiKey(api_key=Secret.from_token(WEAVIATE_API_KEY)),
         collection_settings={"class": WEAVIATE_COLLECTION},
-        additional_config=AdditionalConfig(timeout=Timeout(init=60, query=60, insert=60))
+        additional_config=AdditionalConfig(
+            timeout=Timeout(init=120, query=120, insert=120),
+            skip_init_checks=True,
+            grpc_port=None  # 🛑 Force REST-only to bypass gRPC issues on Windows
+        )
     )
     
     text_embedder = SentenceTransformersTextEmbedder(model=EMBED_MODEL)

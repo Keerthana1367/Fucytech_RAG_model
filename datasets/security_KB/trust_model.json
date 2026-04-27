@@ -1,0 +1,78 @@
+{
+    "trust_zones": [
+        {
+            "id": "ZONE::UNTRUSTED",
+            "description": "External interfaces exposed to attacker",
+            "components": [
+                "IVI::EXT::WiFi",
+                "IVI::EXT::Bluetooth",
+                "IVI::EXT::USB",
+                "TCU::AP::Modem"
+            ]
+        },
+        {
+            "id": "ZONE::CONNECTED",
+            "description": "Connected ECUs with external communication",
+            "components": [
+                "TCU::AP::CommunicationManagement",
+                "IVI::AP::Machine"
+            ]
+        },
+        {
+            "id": "ZONE::GATEWAY",
+            "description": "Central routing and filtering ECU",
+            "components": [
+                "GW::CP::Firewall",
+                "GW::CP::PDURouter"
+            ]
+        },
+        {
+            "id": "ZONE::SAFETY",
+            "description": "Safety-critical ECUs controlling vehicle behavior",
+            "components": [
+                "ABS::CP::MCU",
+                "EPS::CP::MCU",
+                "BMS::CP::MCU",
+                "VCU::CP::MCU"
+            ]
+        }
+    ],
+    "trust_boundaries": [
+        {
+            "id": "TB::External_to_Connected",
+            "from": "ZONE::UNTRUSTED",
+            "to": "ZONE::CONNECTED",
+            "via": "Wireless / Cellular Interfaces",
+            "risk": "High",
+            "controls": [
+                "Authentication",
+                "Encryption",
+                "Sandboxing"
+            ]
+        },
+        {
+            "id": "TB::Connected_to_Gateway",
+            "from": "ZONE::CONNECTED",
+            "to": "ZONE::GATEWAY",
+            "via": "Ethernet",
+            "risk": "Critical",
+            "controls": [
+                "Firewall",
+                "IDS",
+                "IAM"
+            ]
+        },
+        {
+            "id": "TB::Gateway_to_Safety",
+            "from": "ZONE::GATEWAY",
+            "to": "ZONE::SAFETY",
+            "via": "CAN / FlexRay",
+            "risk": "Critical",
+            "controls": [
+                "SecOC",
+                "E2E Protection",
+                "Message Filtering"
+            ]
+        }
+    ]
+}

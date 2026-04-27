@@ -11,10 +11,12 @@ import uuid
 from google.api_core.exceptions import ResourceExhausted
 from cache_manager import save_cache, load_cache
 import time
+import uuid as _uuid
 
 from components import build_store, build_retriever, build_generator, build_ranker
 from config import RETRIEVER_TOP_K, TOP_K_RANKER
 from prompt import TARA_PROMPT_TEMPLATE
+import tenacity
 
 # ── GLOBAL CONFIGURATION (Change these to adjust output depth) ───────────────
 MAX_NODES       = 5    # Maximum architecture components to generate
@@ -84,16 +86,19 @@ def log_prompt(node_name: str, context: list, prompt: str, response: str):
     filepath = os.path.join(log_dir, filename)
     
     with open(filepath, "w", encoding="utf-8") as f:
-        f.write(f"=== {node_name.upper()} LOG ===\n")
-        f.write(f"RAG CONTEXT (First 3 docs):\n")
+        log_content = f"=== {node_name.upper()} LOG ===\n"
+        log_content += f"RAG CONTEXT (First 3 docs):\n"
         for i, doc in enumerate(context[:3]):
             content = getattr(doc, 'content', str(doc))
-            f.write(f"DOC {i}: {content[:300]}...\n")
-        f.write("\n--- PROMPT ---\n")
-        f.write(prompt)
-        f.write("\n\n--- AI RESPONSE ---\n")
-        f.write(response)
-        f.write("\n" + "="*50 + "\n")
+            log_content += f"DOC {i}: {content[:300]}...\n"
+        log_content += "\n--- PROMPT ---\n"
+        log_content += prompt
+        log_content += "\n\n--- AI RESPONSE ---\n"
+        log_content += response
+        log_content += "\n" + "="*50 + "\n"
+        
+        f.write(log_content)
+    return log_content
 
 # ---------------- QUALITY-AWARE RETRY ----------------
 
@@ -186,19 +191,29 @@ def _bump_retry(state: RAGState):
 
     return reset_state
 
+@tenacity.retry(
+    stop=tenacity.stop_after_attempt(3),
+    wait=tenacity.wait_exponential(multiplier=1, min=4, max=10),
+    retry=tenacity.retry_if_exception_type((Exception)),
+    before_sleep=lambda retry_state: print(f"  ⚠️  Connection failed, retrying in {retry_state.next_action.sleep}s... (Attempt {retry_state.attempt_number})")
+)
 def retrieve(state: RAGState):
     """Retrieves relevant documents and re-ranks them for precision."""
     query = state.get("enriched_query") or state.get("user_query")
     print(f"  🔍 Retrieving top {RETRIEVER_TOP_K} candidate chunks...")
-    embedding = text_embedder.run(text=query)["embedding"]
-    result = retriever.run(query_embedding=embedding)
-    raw_docs = result["documents"][:RETRIEVER_TOP_K]
-    
-    print(f"  🎯 Re-ranking to the best {TOP_K_RANKER} matches...")
-    rank_res = ranker.run(query=query, documents=raw_docs)
-    docs = rank_res["documents"]
-    
-    return {"documents": docs}
+    try:
+        embedding = text_embedder.run(text=query)["embedding"]
+        result = retriever.run(query_embedding=embedding)
+        raw_docs = result["documents"][:RETRIEVER_TOP_K]
+        
+        print(f"  🎯 Re-ranking to the best {TOP_K_RANKER} matches...")
+        rank_res = ranker.run(query=query, documents=raw_docs)
+        docs = rank_res["documents"]
+        
+        return {"documents": docs}
+    except Exception as e:
+        print(f"  ❌ Retrieval failed: {e}")
+        raise e
 
 def architect_node(state: RAGState):
     """Deep technical discovery to build the system architecture."""
@@ -242,7 +257,7 @@ def architect_node(state: RAGState):
     raw_json = result["replies"][0] if result["replies"] else "{}"
     
     # Log the RAG and LLM activity
-    log_prompt("architect_node", state["documents"], prompt, raw_json)
+    log_entry = log_prompt("architect_node", state["documents"], prompt, raw_json)
     
     # Cooldown
     time.sleep(10)
@@ -270,10 +285,12 @@ def architect_node(state: RAGState):
         else:
             print(f"Architect SUCCESS: Found {len(nodes)} nodes.")
             save_cache(query, "architect", assets)
-        return {"architecture": assets}
+        full_p = state.get("full_prompt", "") + "\n\n" + log_entry
+        return {"architecture": assets, "full_prompt": full_p}
     except Exception as e:
         print(f"Architect parsing failed: {e}. Raw: {raw_json[:200]}")
-        return {"architecture": {}}
+        full_p = state.get("full_prompt", "") + "\n\n" + log_entry
+        return {"architecture": {}, "full_prompt": full_p}
 
 def threat_analysis_node(state: RAGState):
     """Deep technical threat discovery."""
@@ -313,10 +330,9 @@ def threat_analysis_node(state: RAGState):
     raw_json = result["replies"][0] if result["replies"] else "{}"
     
     # Log the RAG and LLM activity
-    log_prompt("threat_analysis_node", state["documents"], prompt, raw_json)
+    log_entry = log_prompt("threat_analysis_node", state["documents"], prompt, raw_json)
+    full_p = state.get("full_prompt", "") + "\n\n" + log_entry
     
-    # Cooldown
-    time.sleep(10)
     try:
         cleaned = re.sub(r"^```[a-z]*\n?", "", raw_json.strip(), flags=re.MULTILINE)
         cleaned = re.sub(r"```$", "", cleaned.strip())
@@ -332,10 +348,10 @@ def threat_analysis_node(state: RAGState):
         else:
             print(f"Threat Analyst SUCCESS: Found {len(threats)} threats.")
             
-        return {"threats": threats}
+        return {"threats": threats, "full_prompt": full_p}
     except Exception as e:
         print(f"Threat parsing failed: {e}. Raw: {raw_json[:200]}")
-        return {"threats": []}
+        return {"threats": [], "full_prompt": full_p}
 
 def damage_scenario_node(state: RAGState):
     """AGENT 3: Focuses on Impact Ratings and Damage Scenarios."""
@@ -374,10 +390,9 @@ def damage_scenario_node(state: RAGState):
     raw_json = result["replies"][0] if result["replies"] else "{}"
     
     # Log the RAG and LLM activity
-    log_prompt("damage_scenario_node", state.get("documents", []), prompt, raw_json)
+    log_entry = log_prompt("damage_scenario_node", state.get("documents", []), prompt, raw_json)
+    full_p = state.get("full_prompt", "") + "\n\n" + log_entry
     
-    # Cooldown
-    time.sleep(10)
     try:
         cleaned = re.sub(r"^```[a-z]*\n?", "", raw_json.strip(), flags=re.MULTILINE)
         cleaned = re.sub(r"```$", "", cleaned.strip())
@@ -399,92 +414,179 @@ def damage_scenario_node(state: RAGState):
             print(f"Damage Analyst SUCCESS: Found {len(details)} scenarios.")
             save_cache(query, "damage", details)
             
-        return {"damage_details": details}
+        return {"damage_details": details, "full_prompt": full_p}
     except Exception as e:
         print(f"DEBUG: Parsing error: {e}")
         print(f"DEBUG: Raw Damage Response: {raw_json[:500]}")
-        return {"damage_details": []}
+        return {"damage_details": [], "full_prompt": full_p}
 
-def generate_threat_scenarios_node(state: RAGState):
-    """Deterministically generates Threat Scenarios from Damage Scenarios using STRIDE mapping."""
-    print("Generating automated Threat Scenarios (STRIDE mapping)...")
+def threat_scenario_agent_node(state: RAGState):
+    """AGENT 4: Generates the dual Threat_scenarios structure using an LLM."""
+    from prompt import THREAT_SCENARIO_PROMPT
+    query = state.get("user_query", "") or state.get("query", "")
+
+    if not state.get("damage_details"): return {"threat_scenarios": []}
+    
+    print("Generating context-aware Threat Scenarios (Agent 4)...")
+    tmpl = jinja2.Template(THREAT_SCENARIO_PROMPT)
+    prompt = tmpl.render(
+        question=state["user_query"],
+        architecture=json.dumps(state["architecture"], indent=2),
+        damage_scenarios=json.dumps(state["damage_details"], indent=2),
+        threats=json.dumps(state["threats"], indent=2)
+    )
+    
+    result = safe_generate(prompt, "ThreatScenarioAnalyst")
+    raw_json = result["replies"][0] if result["replies"] else "{}"
+    
+    # Log the RAG and LLM activity
+    log_entry = log_prompt("threat_scenario_agent_node", state.get("documents", []), prompt, raw_json)
+    full_p = state.get("full_prompt", "") + "\n\n" + log_entry
+    
+    try:
+        cleaned = re.sub(r"^```[a-z]*\n?", "", raw_json.strip(), flags=re.MULTILINE)
+        cleaned = re.sub(r"```$", "", cleaned.strip())
+        ts_data = json.loads(cleaned)
+        
+        threat_scenarios = ts_data.get("Threat_scenarios", ts_data.get("threat_scenarios", []))
+            
+        if not threat_scenarios:
+            print(f" Threat Scenario Agent FAIL: No scenarios found.")
+        else:
+            print(f"Threat Scenario Agent SUCCESS: Found {len(threat_scenarios)} scenario blocks.")
+            
+        return {"threat_scenarios": threat_scenarios, "full_prompt": full_p}
+    except Exception as e:
+        print(f"Threat Scenario parsing failed: {e}")
+        return {"threat_scenarios": [], "full_prompt": full_p}
+
+def generate_threat_scenarios_node_OLD(state: RAGState):
+    """Generates the dual Threat_scenarios structure (derived + User-defined)."""
+    print("Generating Threat Scenarios structure (derived + User-defined)...")
     
     damage_details = state.get("damage_details", [])
-    threat_scenarios = []
     
-    # Mapping provided by user
-    stride_mapping = {
-        "Integrity": "Tampering",
-        "Confidentiality":"Information Disclosure",
-        "Availability": "Denial",
-        "Authenticity": "Spoofing",
-        "Authorization": "Elevation of Privilege",
-        "Non-repudiation": "Rejection",
-    }
-    
-    ts_count = 1
-    
-    # Flatten damage_details if it's the wrapped structure [Derived, User-defined]
-    flat_scenarios = []
+    def get_threat_type(value):
+        mapping = {
+            "Integrity": "Tampering",
+            "Confidentiality": "Information Disclosure",
+            "Availability": "Denial",
+            "Authenticity": "Spoofing",
+            "Authorization": "Elevation of Privilege",
+            "Non-repudiation": "Rejection",
+        }
+        return mapping.get(value, "Security Violation")
+
+    # 1. Flatten damage scenarios
+    flat_ds = []
     if isinstance(damage_details, list):
         for block in damage_details:
-            if not isinstance(block, dict): 
-                flat_scenarios.append(block)
-                continue
-                
+            if not isinstance(block, dict): continue
             btype = block.get("type", "")
             if btype == "Derived":
-                # Scenarios are in 'Derivations'
-                flat_scenarios.extend(block.get("Derivations", []))
+                flat_ds.extend(block.get("Derivations", []))
             elif btype == "User-defined":
-                # Scenarios are in 'Details'
-                flat_scenarios.extend(block.get("Details", []))
+                flat_ds.extend(block.get("Details", []))
             else:
-                # Direct scenario object or other type
-                flat_scenarios.append(block)
+                flat_ds.append(block)
+
+    derived_details = []
+    user_defined_details = []
     
-    for ds_index, ds in enumerate(flat_scenarios):
-        # Determine ID based on whether it's an architectural derivation or user threat
-        ds_id = ds.get("id", ds.get("Name", f"DS{ds_index+1:03}"))
-        if not re.match(r"^DS\d+", str(ds_id)):
-             ds_id = f"DS{ds_index+1:03}"
-             
+    # 2. Build 'derived' block
+    for i, ds in enumerate(flat_ds):
+        row_id = str(uuid.uuid4())
+        ds_id = f"DS{i+1:03}"
         ds_name = ds.get("Name", ds.get("name", "Unnamed Scenario"))
         
-        # Fallback: if cyberLosses is missing, try to infer from the description/name
+        # Collect losses/nodes
         losses = ds.get("cyberLosses", ds.get("cyberlosses", []))
         if not losses:
-            # Smart Fallback: look for keywords
-            text = (str(ds_name) + " " + str(ds.get("Description", ds.get("task", "")))).lower()
-            inferred = []
-            for prop in stride_mapping.keys():
-                if prop.lower() in text:
-                    inferred.append({"name": prop, "node": "System", "nodeId": ds.get("nodeId", "unknown")})
-            losses = inferred if inferred else [{"name": "Integrity", "node": "System", "nodeId": ds.get("nodeId", "unknown")}]
+            losses = [{"name": "Integrity", "node": "System", "nodeId": ds.get("nodeId", "unknown")}]
 
+        # Group losses by nodeId for this Damage Scenario
+        grouped_losses = {}
         for loss in losses:
-            loss_name = loss.get("name", loss.get("value", "Integrity"))
-            asset_name = loss.get("node", loss.get("asset", "System"))
-            threat_type = stride_mapping.get(loss_name, "Security Violation")
+            nid = loss.get("nodeId", "unknown")
+            if nid not in grouped_losses:
+                grouped_losses[nid] = {
+                    "node": loss.get("node", "System"),
+                    "nodeId": nid,
+                    "props": []
+                }
             
-            ts_entry = {
-                "node": asset_name,
-                "nodeId": loss.get("nodeId", ""),
-                "props": [
-                    {
-                        "id": str(uuid.uuid4()),
-                        "is_risk_added": True,
-                        "name": loss_name,
-                        "isSelected": True,
-                        "key": 1
-                    }
-                ],
-                "name": f"[{ts_count:03}] {threat_type} of {asset_name}",
-                "damage_scenario": f"[{ds_id}] {ds_name}", # helper for grouping
-                "id": f"TS{ts_count:03}", # helper
-            }
-            threat_scenarios.append(ts_entry)
-            ts_count += 1
+            loss_name = loss.get("name", "Integrity")
+            prop_id = f"ts-{ds_id.lower()}-{grouped_losses[nid]['node'].lower().replace(' ', '-')[:10]}-{loss_name.lower()[:5]}"
+            
+            grouped_losses[nid]["props"].append({
+                "id": prop_id,
+                "is_risk_added": True if len(grouped_losses[nid]["props"]) == 0 else False,
+                "name": loss_name,
+                "isSelected": True,
+                "key": len(grouped_losses[nid]["props"]) + 1
+            })
+
+        node_details = []
+        for nid, node_info in grouped_losses.items():
+            node_details.append({
+                "node": node_info["node"],
+                "nodeId": node_info["nodeId"],
+                "props": node_info["props"],
+                "name": ds_name
+            })
+
+        derived_details.append({
+            "rowId": row_id,
+            "id": ds_id,
+            "Details": node_details
+        })
+
+    # 3. Build 'User-defined' block (Heuristic grouping)
+    # Group threats by asset or theme to create a few realistic scenarios
+    asset_groups = {}
+    for entry in derived_details:
+        for node in entry["Details"]:
+            asset = node["node"]
+            if asset not in asset_groups: asset_groups[asset] = []
+            asset_groups[asset].append({
+                "rowId": entry["rowId"],
+                "nodeId": node["nodeId"],
+                "propId": node["props"][0]["id"],
+                "loss": node["props"][0]["name"]
+            })
+
+    for asset, members in asset_groups.items():
+        main_loss = members[0]["loss"]
+        threat_type = get_threat_type(main_loss)
+        user_defined_details.append({
+            "name": f"{threat_type} of {asset}",
+            "description": f"Attack targeting the {asset} to compromise its {main_loss}. This could lead to system-wide impact.",
+            "id": str(uuid.uuid4()),
+            "threat_ids": [
+                {
+                    "propId": m["propId"],
+                    "nodeId": m["nodeId"],
+                    "rowId": m["rowId"]
+                } for m in members
+            ]
+        })
+
+    threat_scenarios = [
+        {
+            "_id": str(uuid.uuid4()),
+            "model_id": "", # Filled during evaluate
+            "type": "derived",
+            "Details": derived_details,
+            "user_id": "" # Filled during evaluate
+        },
+        {
+            "_id": str(uuid.uuid4()),
+            "model_id": "",
+            "type": "User-defined",
+            "Details": user_defined_details,
+            "user_id": ""
+        }
+    ]
             
     return {"threat_scenarios": threat_scenarios}
 
@@ -582,9 +684,9 @@ def evaluate(state: RAGState):
         if isinstance(assets_data, list): assets_list = assets_data
         else: assets_list = [assets_data]
 
-    # Deterministic metadata and structure fix for Assets
-    mid = "698397514b57b8f24ed40a43" # Consistent with user example
-    uid = "66ce823d95a055635c0ae0ae" # Consistent with user example
+    # ── Standard UUIDs for top-level entities ─────────────────────────────
+    mid = str(uuid.uuid4()) 
+    uid = str(uuid.uuid4()) 
     
     # 1. PRE-PROCESS: Ensure all assets have a 'template' key before mapping
     unified_assets = []
@@ -698,7 +800,7 @@ def evaluate(state: RAGState):
             
             # ── Properties: normalize to list of strings ──
             if "properties" not in node: 
-                node["properties"] = ["Integrity", "Confidentiality", "Authenticity", "Authorization", "Availability", "Non-repudiation"]
+                node["properties"] = ["Integrity"] # Minimal fallback
             else:
                 clean_props = []
                 for p in node["properties"]:
@@ -707,6 +809,7 @@ def evaluate(state: RAGState):
                     else:
                         clean_props.append(str(p))
                 node["properties"] = clean_props
+
             
             # ── Visual Styling (matches bms_1.json conventions) ──
             if "style" not in node["data"]:
@@ -775,9 +878,9 @@ def evaluate(state: RAGState):
                 "strokeDasharray": "0", "strokeWidth": 2
             }
 
-        # Details handling: Remap nodeId to new UUIDs
+        # Details handling: Remap nodeId and ensure prop formats
         if "Details" not in asset or not asset["Details"]:
-            # Fallback Detail generation if missing
+            # Fallback Detail generation
             asset["Details"] = []
             for node in asset.get("template", {}).get("nodes", []):
                 if node.get("type") != "group":
@@ -795,11 +898,20 @@ def evaluate(state: RAGState):
                     detail.get("nodeId"),
                     label_id_map.get(detail.get("nodeId"), detail.get("nodeId"))
                 )
+                
+                # Standardize prop objects
+                clean_props = []
                 for prop in detail.get("props", []):
-                    pid = str(prop.get("id", ""))
-                    # Replace any non-UUID prop id (catches "p-cellmon-integ" etc.)
-                    if not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', pid):
-                        prop["id"] = str(uuid.uuid4())
+                    if isinstance(prop, str):
+                        clean_props.append({"name": prop, "id": str(uuid.uuid4())})
+                    else:
+                        # Fix non-UUID IDs
+                        pid = str(prop.get("id", ""))
+                        if not re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', pid):
+                            prop["id"] = str(uuid.uuid4())
+                        clean_props.append(prop)
+                detail["props"] = clean_props
+
 
     # ── DATA NORMALIZATION: Remap all state variables using the deep mapping ──
     def _remap(old_nid):
@@ -841,89 +953,99 @@ def evaluate(state: RAGState):
                         cl["id"] = str(uuid.uuid4())
 
     # Process Threat Scenarios (Automated)
-    ts_scenarios = state.get("threat_scenarios", [])
-    for ts in ts_scenarios:
-        ts["nodeId"] = _remap(ts.get("nodeId"))
-        for p in ts.get("props", []):
-             if not p.get("id") or not re.match(r'^[0-9a-f]{8}-', str(p.get("id", ""))):
-                 p["id"] = str(uuid.uuid4())
-    # ── EXTRACT User-defined Scenarios for Assembly ──
-    # If LLM gave [Derived, User-defined], we only want the User-defined Details array.
-    user_defined_scenarios = []
-    if isinstance(raw_damage_details, list):
-        # Look for the block where type="User-defined"
-        user_block = next((b for b in raw_damage_details if isinstance(b, dict) and b.get("type") == "User-defined"), None)
-        if user_block:
-            user_defined_scenarios = user_block.get("Details", [])
-        else:
-            # Fallback: if it's just a list of scenarios (old format)
-            user_defined_scenarios = raw_damage_details
-
-    # NOW build threat_scenarios_details from ts_list (which is the most comprehensive source)
-    # Group ts_list by the damage scenario it references
-    threat_scenarios_details = []
-    grouped_ts = {}
+    # ── EXTRACT Threat Scenarios for Assembly ──
+    raw_ts_data = state.get("threat_scenarios", [])
+    derived_ts_details = []
+    user_defined_ts_details = []
     
-    for ts in ts_scenarios:
-        ds_ref = ts.get("damage_scenario", "")
-        # Extract DSxxx from "[DSxxx] Name"
-        match = re.search(r"\[(DS\d+)\]", ds_ref)
-        ds_id = match.group(1) if match else "Global"
-        if ds_id not in grouped_ts:
-            grouped_ts[ds_id] = []
-        grouped_ts[ds_id].append(ts)
-        
-    for ds_id, ts_items in grouped_ts.items():
-        # Group by nodeId to match bms_1.json structure
-        node_grouping = {}
-        ds_display_name = ""
-        
-        for ts in ts_items:
-            nid = _remap(ts.get("nodeId", ""))
-            # If still unknown, try fuzzy matching label to ID map inside the assembly
-            if nid == "unknown" or not nid:
-                label = ts.get("node", "")
-                nid = node_id_map.get(label, label_id_map.get(label, nid))
-                
-            node_name = ts.get("node", "Component")
-            if not ds_display_name:
-                # Use the descriptive name from the first threat in this group
-                ds_display_name = ts.get("name", "Threat Scenario").split(']')[-1].strip()
-                
-            if nid not in node_grouping:
-                node_grouping[nid] = {
-                    "node": node_name,
-                    "nodeId": nid,
-                    "props": [],
-                    "name": ds_display_name
-                }
+    if isinstance(raw_ts_data, list):
+        # The agent returns a list of blocks [ {type: "derived", Details: [...]}, {type: "User-defined", Details: [...]} ]
+        for block in raw_ts_data:
+            if not isinstance(block, dict): continue
+            btype = block.get("type", "").lower()
+            if btype == "derived":
+                derived_ts_details = block.get("Details", [])
+            elif btype == "user-defined":
+                user_defined_ts_details = block.get("Details", [])
+    
+    # If the agent output was flat or failed, fall back to manual grouping logic for derived
+    if not derived_ts_details and isinstance(raw_ts_data, list) and len(raw_ts_data) > 0:
+        # Fallback: Treat raw_ts_data as a list of individual threat entries
+        grouped_ts = {}
+        for ts in raw_ts_data:
+            if not isinstance(ts, dict): continue
+            ds_ref = ts.get("damage_scenario", "")
+            match = re.search(r"\[(DS\d+)\]", ds_ref)
+            ds_id = match.group(1) if match else "Global"
+            if ds_id not in grouped_ts: grouped_ts[ds_id] = []
+            grouped_ts[ds_id].append(ts)
             
-            # Map props and ensure IDs are stable and unique
-            for p in ts.get("props", []):
-                if isinstance(p, dict):
-                    p_name = p.get("name", "Integrity")
-                    # Check if this prop already exists for this node to avoid duplicates
-                    if not any(ep["name"] == p_name for ep in node_grouping[nid]["props"]):
-                        # Ensure property has a valid UUID
-                        pid = p.get("id", str(uuid.uuid4()))
-                        if not re.match(r'^[0-9a-f]{8}-', str(pid)):
-                            pid = str(uuid.uuid4())
-                            
-                        node_grouping[nid]["props"].append({
-                            "id": pid,
-                            "is_risk_added": p.get("is_risk_added", True),
-                            "name": p_name,
-                            "isSelected": p.get("isSelected", True),
-                            "key": len(node_grouping[nid]["props"]) + 1
-                        })
-        
-        if node_grouping:
-            threat_scenarios_details.append({
+        for ds_id, ts_items in grouped_ts.items():
+            node_grouping = {}
+            ds_name = ""
+            for ts in ts_items:
+                nid = _remap(ts.get("nodeId", ""))
+                if not ds_name: ds_name = ts.get("name", "Threat Scenario").split(']')[-1].strip()
+                if nid not in node_grouping:
+                    node_grouping[nid] = {"node": ts.get("node", "Component"), "nodeId": nid, "props": [], "name": ds_name}
+                for p in ts.get("props", []):
+                    node_grouping[nid]["props"].append({
+                        "id": p.get("id", str(uuid.uuid4())),
+                        "is_risk_added": p.get("is_risk_added", True),
+                        "name": p.get("name", "Integrity"),
+                        "isSelected": True,
+                        "key": len(node_grouping[nid]["props"]) + 1
+                    })
+            derived_ts_details.append({
                 "rowId": str(uuid.uuid4()),
                 "id": ds_id,
                 "Details": list(node_grouping.values())
             })
-    # (Removed redundant fallback as it is now integrated into primary threat assembly)
+            
+    threat_scenarios_details = derived_ts_details
+
+    # ── EXTRACT Damage Scenarios ──
+    raw_ds_data = state.get("damage_details", [])
+    ds_derivations = []
+    user_defined_ds_details = []
+    
+    if isinstance(raw_ds_data, list):
+        for block in raw_ds_data:
+            if not isinstance(block, dict): continue
+            btype = block.get("type", "").lower()
+            if btype == "derived":
+                ds_derivations = block.get("Derivations", [])
+            elif btype == "user-defined":
+                user_defined_ds_details = block.get("Details", [])
+            else:
+                # Fallback for older agent format
+                user_defined_ds_details.append(block)
+
+    # ── CLEAN UP IDs for React Flow Compatibility ──
+    for row in derived_ts_details:
+        if "Details" in row:
+            for item in row["Details"]:
+                item["nodeId"] = _remap(item.get("nodeId"))
+                for p in item.get("props", []):
+                    if not re.match(r'^[0-9a-f]{8}-', str(p.get("id", ""))):
+                        p["id"] = str(uuid.uuid4())
+
+    for dd in user_defined_ds_details:
+        if "cyberLosses" in dd:
+            for cl in dd["cyberLosses"]:
+                cl["nodeId"] = _remap(cl.get("nodeId"))
+                if not cl.get("id") or not re.match(r'^[0-9a-f]{8}-', str(cl.get("id", ""))):
+                    cl["id"] = str(uuid.uuid4())
+        
+        # Clean the new nested Details array
+        if "Details" in dd:
+            for detail in dd["Details"]:
+                detail["nodeId"] = _remap(detail.get("nodeId"))
+                for p in detail.get("props", []):
+                    if not re.match(r'^[0-9a-f]{8}-', str(p.get("id", ""))):
+                        p["id"] = str(uuid.uuid4())
+
+        
 
     # ── BUILD Assets[0].Details: node + edge property list (matches bms_1.json) ──
     # This is the CRITICAL structure the frontend expects.
@@ -1004,7 +1126,7 @@ def evaluate(state: RAGState):
         "Assets": unified_assets,
         "Attacks": [
             {
-                "_id": "698397514b57b8f24ed40a45",
+                "_id": str(uuid.uuid4()),
                 "model_id": mid,
                 "type": "attack_trees",
                 "scenes": state.get("attacks", [])
@@ -1012,11 +1134,10 @@ def evaluate(state: RAGState):
         ],
         "Damage_scenarios": [
             {
-                "_id": "698397514b57b8f24ed40a4b",
+                "_id": str(uuid.uuid4()),
                 "model_id": mid,
                 "type": "Derived",
                 "Derivations": ds_derivations,
-                "Details": first_asset.get("Details", []),
                 "user_id": uid
             },
             {
@@ -1025,70 +1146,39 @@ def evaluate(state: RAGState):
                 "type": "User-defined",
                 "Details": [
                     {
-                        "Description": dd.get("Description", dd.get("description", f"Potential impact analysis for {dd.get('Name', 'System')}")),
-                        "Name": dd.get("Name", dd.get("name", f"Damage Scenario DS{i+1:03}")),
-                        "cyberLosses": [
-                            {
-                                "id": cl.get("id", str(uuid.uuid4())),
-                                "is_risk_added": cl.get("is_risk_added", True),
-                                "name": cl.get("name", "Integrity"),
-                                "isSelected": cl.get("isSelected", True),
-                                "node": cl.get("node", "Component"),
-                                "nodeId": _remap(cl.get("nodeId", ""))
-                            } for cl in dd.get("cyberLosses", dd.get("cyberlosses", []))
-                        ] if (dd.get("cyberLosses") or dd.get("cyberlosses")) else [
-                            {
-                                "id": str(uuid.uuid4()),
-                                "is_risk_added": True,
-                                "name": "Integrity",
-                                "isSelected": True,
-                                "node": "System",
-                                "nodeId": "unknown"
-                            }
-                        ],
-                        "impacts": {
-                            "Financial Impact": dd.get("impacts", {}).get("Financial Impact", "Severe"),
-                            "Safety Impact": dd.get("impacts", {}).get("Safety Impact", "Severe"),
-                            "Operational Impact": dd.get("impacts", {}).get("Operational Impact", "Severe"),
-                            "Privacy Impact": dd.get("impacts", {}).get("Privacy Impact", "Negligible")
-                        },
+                        "Description": ds.get("Description", ds.get("description", "No description available.")),
+                        "Name": ds.get("Name", ds.get("name", "Unnamed Scenario")),
+                        "props": ds.get("props", []),
+                        "cyberLosses": ds.get("cyberLosses", ds.get("cyberlosses", [])),
+                        "impacts": ds.get("impacts", {
+                            "Financial Impact": "Moderate",
+                            "Safety Impact": "Severe",
+                            "Operational Impact": "Moderate",
+                            "Privacy Impact": "Negligible"
+                        }),
                         "key": i + 1,
-                        "_id": dd.get("_id", str(uuid.uuid4()))
-                    } for i, dd in enumerate(user_defined_scenarios)
-                ] if user_defined_scenarios else [
-                    {
-                        "Description": t.get("description", t.get("name", "")),
-                        "Name": t.get("name", f"Damage Scenario DS{i+1:03}"),
-                        "cyberLosses": [{
-                            "id": str(uuid.uuid4()),
-                            "is_risk_added": True,
-                            "name": t.get("loss", "Integrity"),
-                            "isSelected": True,
-                            "node": t.get("asset", "Component"),
-                            "nodeId": _remap(t.get("nodeId", ""))
-                        }],
-                        "impacts": {
-                            "Financial Impact": t.get("financial_impact", "Severe"),
-                            "Safety Impact": t.get("safety_impact", "Severe"),
-                            "Operational Impact": t.get("operational_impact", "Severe"),
-                            "Privacy Impact": t.get("privacy_impact", "Negligible")
-                        },
-                        "key": i + 1,
-                        "_id": str(uuid.uuid4())
-                    } for i, t in enumerate(raw_threats)
+                        "_id": ds.get("_id", ds.get("id", str(uuid.uuid4())))
+                    } for i, ds in enumerate(user_defined_ds_details)
                 ],
                 "user_id": uid
             }
         ],
         "Threat_scenarios": [
             {
-                "_id": "698397514b57b8f24ed40a4e",
+                "_id": str(uuid.uuid4()),
                 "model_id": mid,
                 "type": "derived",
-                "Details": threat_scenarios_details,
+                "Details": derived_ts_details,
+                "user_id": uid
+            },
+            {
+                "_id": str(uuid.uuid4()),
+                "model_id": mid,
+                "type": "User-defined",
+                "Details": user_defined_ts_details,
                 "user_id": uid
             }
-        ]
+        ],
     }
 
     # (Details are now preserved in Assets as requested)
@@ -1120,6 +1210,28 @@ def evaluate(state: RAGState):
     except Exception as e:
         print(f"  ⚠️  RowId linking skipped/failed: {e}")
 
+    # ── FINAL UUID STAMPING (Integrated from backend postprocess) ──────────
+    def _final_stamp(o):
+        """Recursive walk to ensure all ID keys are valid UUIDs."""
+        ID_KEYS = {"id", "_id", "model_id", "user_id", "nodeId", "rowId", "propId", "threat_id", "ID"}
+        def _is_bad(val):
+            if not val: return True
+            if not isinstance(val, str): return False
+            # If it's not a standard UUID (8-4-4-4-12) or contains placeholders
+            is_uuid = re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', val.lower())
+            return not is_uuid or "PLACEHOLDER" in val or "<" in val
+            
+        if isinstance(o, dict):
+            for k, v in list(o.items()):
+                if k in ID_KEYS and _is_bad(v):
+                    o[k] = str(uuid.uuid4())
+                else:
+                    _final_stamp(v)
+        elif isinstance(o, list):
+            for item in o:
+                _final_stamp(item)
+
+    _final_stamp(final_output)
 
     answer = json.dumps(final_output, indent=2)
 
@@ -1162,7 +1274,7 @@ def build_graph(all_docs):
     builder.add_node("architect", architect_node)
     builder.add_node("threats", threat_analysis_node)
     builder.add_node("damage", damage_scenario_node)
-    builder.add_node("threat_scenarios", generate_threat_scenarios_node)
+    builder.add_node("threat_scenarios", threat_scenario_agent_node)
     builder.add_node("attacks", generate_attack_trees_node)
     builder.add_node("evaluate", evaluate)
 

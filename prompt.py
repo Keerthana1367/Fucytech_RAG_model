@@ -3,9 +3,10 @@
 # =============================================================================
 #
 # Each pipeline agent uses its own specialized prompt:
-#   Architect Agent  → ARCHITECT_PROMPT  → System architecture (nodes, edges, Details)
-#   Threat Analyst   → THREAT_PROMPT     → Threat derivations with nodeId refs
-#   Damage Analyst   → DAMAGE_PROMPT     → Damage impact assessments
+#   Architect Agent      → ARCHITECT_PROMPT   → System architecture (nodes, edges, Details)
+#   Threat Analyst       → THREAT_PROMPT      → Threat derivations with nodeId refs
+#   Damage Analyst       → DAMAGE_PROMPT      → Damage impact assessments
+#   Threat Scenario Agent→ THREAT_SCENARIO_PROMPT → Threat scenarios (derived + user-defined)
 #
 # TARA_PROMPT_TEMPLATE is retained for backward compatibility but is NOT
 # called by any pipeline node. See the individual agent prompts below.
@@ -53,9 +54,9 @@ Design a professional-grade system architecture for "{{ question }}" with exactl
 
 ### ARCHITECTURE RULES:
 
-1. **HIERARCHY & REQUIRED COMPONENTS** — Use group containers and specific components:
+5. **HIERARCHY & REQUIRED COMPONENTS** — Use group containers and specific components:
    - For the target system, you must include ALL components and interfaces listed in the provided REFERENCE CONTEXT and ECU HINTS.
-   - You MUST include relevant data nodes (e.g. `SoC`, `SoH` for battery systems, or `Speed`, `Angle` for control systems) as explicit components using `type: "data"`.
+   - You MUST include relevant data nodes (e.g. `SensorData`, `ControlSignals`, `SystemStatus`) as explicit components using `type: "data"`.
    - `type:"group"` nodes are invisible containers (dashed border, no solid backgroundColor).
    - The top-level system group has `"parentId": null`.
    - Sub-system groups nest inside the top-level group via `parentId`.
@@ -92,16 +93,16 @@ Design a professional-grade system architecture for "{{ question }}" with exactl
    - Flash/storage: purple (`#ccc8ea`)
    - Security (Keys, Certificates): green (`#51dc1e`, `#62c945`)
    - Debug ports: red/orange (`#e26a6a`)
-   - Data items (SoC, SoH): light yellow (`#e3e896`)
+   - Data items: light yellow (`#e3e896`)
    - External/generic: gray (`#dadada`)
 
 7. **PROPERTIES** — Assign realistic subsets from:
    `Integrity`, `Confidentiality`, `Authenticity`, `Authorization`, `Availability`, `Non-repudiation`
 
 8. **LAYOUT** — Assign non-overlapping positions:
-   - Groups: large bounding boxes (e.g., 800×500 px)
-   - Components: spread within groups (x: 100–900, y: 50–500)
-   - No two nodes at the same position. No node at (0, 0).
+    - Groups: large bounding boxes (e.g., 800×500 px)
+    - Components: spread within groups (x: 100–900, y: 50–500)
+    - No two nodes at the same position. No node at (0, 0).
 
 ### OUTPUT FORMAT:
 Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `{`.
@@ -136,7 +137,7 @@ Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `
         "positionAbsolute": {"x": 100, "y": 50},
         "height": 510,
         "width": 1041,
-        "properties": ["Integrity", "Authenticity"],
+        "properties": ["Integrity", "Confidentiality", "Authenticity", "Authorization", "Availability", "Non-repudiation"],
         "style": {"height": 510, "width": 1041},
         "dragging": false,
         "resizing": false,
@@ -171,43 +172,7 @@ Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `
         "height": 60,
         "width": 150,
         "isAsset": false,
-        "properties": ["Integrity", "Confidentiality"],
-        "style": {"height": 60, "width": 150},
-        "dragging": false,
-        "resizing": false,
-        "selected": false,
-        "zIndex": 0
-
-      },
-      {
-        "id": "comp-two",
-        "type": "default",
-        "parentId": "sys-main-group",
-        "data": {
-          "label": "AnotherComponent",
-          "description": "Description of second component",
-          "style": {
-            "backgroundColor": "#e6df19",
-            "borderColor": "gray",
-            "borderStyle": "solid",
-            "borderWidth": "2px",
-            "color": "black",
-            "fontFamily": "Inter",
-            "fontSize": "12px",
-            "fontStyle": "normal",
-            "fontWeight": 500,
-            "height": 60,
-            "textAlign": "center",
-            "textDecoration": "none",
-            "width": 150
-          }
-        },
-        "position": {"x": 550, "y": 200},
-        "positionAbsolute": {"x": 550, "y": 200},
-        "height": 60,
-        "width": 150,
-        "isAsset": false,
-        "properties": ["Integrity", "Availability"],
+        "properties": ["Integrity", "Confidentiality", "Authenticity", "Authorization", "Availability", "Non-repudiation"],
         "style": {"height": 60, "width": 150},
         "dragging": false,
         "resizing": false,
@@ -217,9 +182,9 @@ Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `
     ],
     "edges": [
       {
-        "id": "edge-comp1-comp2",
+        "id": "edge-comp1-target",
         "source": "comp-one",
-        "target": "comp-two",
+        "target": "comp-target",
         "type": "step",
         "animated": true,
         "sourceHandle": "b",
@@ -239,34 +204,17 @@ Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `
       "desc": "Technical description of this component",
       "type": "default",
       "props": [
-        {
-          "name": "Integrity",
-          "id": "p-comp1-integ"
-        },
-        {
-          "name": "Confidentiality",
-          "id": "p-comp1-conf"
-        }
-      ]
-    },
-    {
-      "nodeId": "comp-two",
-      "name": "AnotherComponent",
-      "desc": "Description of second component",
-      "type": "default",
-      "props": [
-        {
-          "name": "Integrity",
-          "id": "p-comp2-integ"
-        },
-        {
-          "name": "Availability",
-          "id": "p-comp2-avail"
-        }
+        { "name": "Integrity", "id": "p-comp1-integ" },
+        { "name": "Confidentiality", "id": "p-comp1-conf" },
+        { "name": "Authenticity", "id": "p-comp1-auth" },
+        { "name": "Authorization", "id": "p-comp1-author" },
+        { "name": "Availability", "id": "p-comp1-avail" },
+        { "name": "Non-repudiation", "id": "p-comp1-nonrep" }
       ]
     }
   ]
 }
+
 """
 
 
@@ -359,15 +307,16 @@ You MUST generate exactly one Detail entry per threat — do NOT skip any.
 
 ### ASSESSMENT RULES:
 
-1. **ONE-TO-ONE MAPPING**: Each threat gets exactly one Detail entry. Count of Details must equal count of threats.
+1. **TECHNICAL SPECIFICITY (CRITICAL)**: 
+   - DO NOT use placeholders like "Threat Scenario", "Component", or "ComponentName".
+   - `Name`: Create a specific, professional name for the damage scenario (e.g., "Unauthorized ECU Firmware Modification", "Sensor Data Spoofing leading to unintended braking").
+   - `Description`: Provide a technical, 2-3 sentence analysis of how the security property loss impacts the system.
 
-2. **NODE REFERENCE**: The `nodeId` in `cyberLosses` MUST use the EXACT node `id` from the architecture.
-   Copy the `nodeId` directly from the corresponding threat entry. Do NOT change it.
+2. **ONE-TO-ONE MAPPING**: Each threat gets exactly one Detail entry. Count of Details must equal count of threats.
 
-3. **CYBER LOSSES**: Map the threat's `loss` property to the correct node:
-   - `name`: The cybersecurity property (e.g., "Integrity", "Availability")
-   - `node`: The human-readable component name (from the threat's `asset` field)
-   - `nodeId`: The exact node ID (from the threat's `nodeId` field)
+3. **NODE REFERENCE**: The `nodeId` in `cyberLosses` MUST use the EXACT node `id` from the architecture.
+   - `node`: Use the EXACT human-readable name of the component from the architecture JSON (e.g., "Infotainment MCU", "CAN Gateway").
+   - `nodeId`: Copy the `nodeId` directly from the corresponding threat entry.
 
 4. **IMPACT RATING**: Assign ratings using ONLY these values:
    `Negligible` | `Minor` | `Moderate` | `Major` | `Severe`
@@ -382,65 +331,160 @@ You MUST generate exactly one Detail entry per threat — do NOT skip any.
 Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `{`.
 
 {
-  "Damage_scenarios": [
+  "_id": "<unique-uuid>",
+  "model_id": "<model-id>",
+  "type": "User-defined",
+  "Details": [
     {
-      "_id": "698397514b57b8f24ed40a4b",
-      "model_id": "698397514b57b8f24ed40a43",
-      "type": "Derived",
-      "Derivations": [
+      "Description": "Detailed scenario analysis...",
+      "Name": "Scenario Name",
+      "props": [
+        { "name": "Integrity", "id": "<prop-id>" },
+        { "name": "Confidentiality", "id": "<prop-id>" }
+      ],
+      "cyberLosses": [
         {
-          "id": "DS001",
-          "nodeId": "<exact-node-id-from-architecture>",
-          "is_checked": null
+          "id": "<prop-id>",
+          "is_risk_added": true,
+          "name": "Integrity",
+          "isSelected": true,
+          "node": "ComponentName",
+          "nodeId": "<node-id>"
         }
       ],
-      "Details": [
-        {
-          "nodeId": "<node-id-for-battery-pack>",
-          "name": "BatteryPack",
-          "desc": "Technical description",
-          "type": "default",
-          "props": [
-            { "name": "Integrity", "id": "p-bp-integ" },
-            { "name": "Confidentiality", "id": "p-bp-conf" },
-            { "name": "Authenticity", "id": "p-bp-auth" },
-            { "name": "Authorization", "id": "p-bp-author" },
-            { "name": "Availability", "id": "p-bp-avail" },
-            { "name": "Non-repudiation", "id": "p-bp-nonrep" }
-          ]
-        }
-      ]
-    },
-    {
-      "_id": "698397514b57b8f24ed40a4c",
-      "model_id": "698397514b57b8f24ed40a43",
-      "type": "User-defined",
-      "Details": [
-        {
-          "Description": "Detailed scenario analysis...",
-          "Name": "Short Scenario Name",
-          "cyberLosses": [
-            {
-              "id": "cl-unique-id",
-              "is_risk_added": true,
-              "name": "Integrity",
-              "isSelected": true,
-              "node": "Code Flash",
-              "nodeId": "<node-id-for-code-flash>"
-            }
-          ],
-          "impacts": {
-            "Financial Impact": "Severe",
-            "Safety Impact": "Severe",
-            "Operational Impact": "Severe",
-            "Privacy Impact": "Negligible"
-          },
-          "key": 1,
-          "_id": "dd-001"
-        }
-      ]
+      "impacts": {
+        "Financial Impact": "Severe",
+        "Safety Impact": "Severe",
+        "Operational Impact": "Severe",
+        "Privacy Impact": "Negligible"
+      },
+      "key": 1,
+      "_id": "<unique-uuid>"
     }
   ]
 }
+"""
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. THREAT SCENARIO AGENT
+# ─────────────────────────────────────────────────────────────────────────────
+
+THREAT_SCENARIO_PROMPT = """
+You are a Cybersecurity Threat Scenario Specialist performing ISO 21434 TARA threat scenario generation.
+
+TARGET SYSTEM: {{ question }}
+
+### SYSTEM ARCHITECTURE (for nodeId reference):
+{{ architecture }}
+
+### DAMAGE SCENARIOS (for DS mapping):
+{{ damage_scenarios }}
+
+### THREATS (for prop and nodeId cross-reference):
+{{ threats }}
+
+### YOUR TASK:
+Generate a complete Threat_scenarios structure with exactly TWO objects:
+  1. type: "derived"   — pin each DS entry to its affected node(s) and cybersecurity properties from the architecture.
+  2. type: "User-defined" — generate realistic, named attack scenarios that reference the derived DS rows via threat_ids.
+
+### STRICT RULES:
+
+**DERIVED OBJECT:**
+1. Each `Details` entry maps to one damage scenario (DS001, DS002, ... in sequence).
+2. Each DS entry contains one or more node `Details` items — one per affected node from the architecture.
+3. Each node `Details` item contains:
+   - `node`: Human-readable component name (MUST match architecture node label exactly)
+   - `nodeId`: MUST be the EXACT node `id` from the architecture JSON. Copy it verbatim. Do NOT invent UUIDs.
+   - `props`: Array of cybersecurity properties relevant to this node for this threat scenario.
+   - `name`: The damage scenario name (same as the DS name from damage_scenarios).
+4. Each prop entry MUST have:
+   - `id`: A unique string ID (format: `"ts-<dsid>-<node-short>-<prop-short>"`, e.g. `"ts-ds001-codeflash-integ"`)
+   - `is_risk_added`: boolean — set `true` if this prop is the PRIMARY loss type for this DS, else `false`
+   - `name`: One of `Integrity` | `Confidentiality` | `Authenticity` | `Authorization` | `Availability` | `Non-repudiation`
+   - `isSelected`: always `true`
+   - `key`: integer, incrementing per prop within each node block starting at 1
+5. `rowId`: A unique UUID-format string per DS row (generate a valid UUID v4).
+6. `id`: Sequential DS identifier — "DS001", "DS002", etc.
+
+**USER-DEFINED OBJECT:**
+1. Generate one named attack scenario per 2–3 derived DS entries (group related DS rows together).
+2. Each scenario MUST have:
+   - `name`: A specific, realistic attack name (e.g. "CAN Bus Replay Attack", "JTAG Firmware Extraction")
+   - `description`: A detailed, technically accurate attack description (2–4 sentences). Reference specific nodes, protocols, and consequences.
+   - `id`: A unique UUID v4 string.
+   - `threat_ids`: Array of prop references from the derived DS entries that this attack exploits. Each entry MUST have:
+       - `propId`: The EXACT `id` value of the prop from the derived Details (copy verbatim).
+       - `nodeId`: The EXACT node `id` from the architecture (copy verbatim).
+       - `rowId`: The EXACT `rowId` of the DS row this prop belongs to (copy verbatim).
+
+### CROSS-REFERENCE INTEGRITY (CRITICAL):
+- Every `nodeId` in both derived and user-defined sections MUST exist in the architecture JSON.
+- Every `propId` in `threat_ids` MUST match an `id` in the derived `props` array exactly.
+- Every `rowId` in `threat_ids` MUST match a `rowId` in the derived Details exactly.
+- Do NOT invent any IDs. Copy them exactly from the inputs provided.
+
+### OUTPUT FORMAT:
+Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `{`.
+
+{
+  "Threat_scenarios": [
+    {
+      "_id": "",
+      "model_id": "",
+      "type": "derived",
+      "Details": [
+        {
+          "rowId": "<uuid-v4>",
+          "id": "DS001",
+          "Details": [
+            {
+              "node": "<exact-node-label-from-architecture>",
+              "nodeId": "<exact-node-id-from-architecture>",
+              "props": [
+                {
+                  "id": "ts-ds001-<node-short>-<prop-short>",
+                  "is_risk_added": true,
+                  "name": "Integrity",
+                  "isSelected": true,
+                  "key": 1
+                },
+                {
+                  "id": "ts-ds001-<node-short>-conf",
+                  "is_risk_added": false,
+                  "name": "Confidentiality",
+                  "isSelected": true,
+                  "key": 2
+                }
+              ],
+              "name": "<damage-scenario-name>"
+            }
+          ]
+        }
+      ],
+      "user_id": ""
+    },
+    {
+      "_id": "",
+      "model_id": "",
+      "type": "User-defined",
+      "Details": [
+        {
+          "name": "<realistic-attack-name>",
+          "description": "<detailed-technical-attack-description>",
+          "id": "<uuid-v4>",
+          "threat_ids": [
+            {
+              "propId": "<exact-prop-id-from-derived-props>",
+              "nodeId": "<exact-node-id-from-architecture>",
+              "rowId": "<exact-rowId-from-derived-Details>"
+            }
+          ]
+        }
+      ],
+      "user_id": ""
+    }
+  ]
+}
 """

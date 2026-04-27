@@ -18,6 +18,7 @@ ECU_PATH     = BASE_PATH / "dataecu.json"
 ANNEX_PATH   = BASE_PATH / "annex.json"
 CLAUSE_PATH  = BASE_PATH / "clauses"
 REPORTS_PATH = BASE_PATH / "reports_db"
+SECURITY_KB_PATH = BASE_PATH / "security_KB"
 PDF_PATH     = BASE_PATH
 
 

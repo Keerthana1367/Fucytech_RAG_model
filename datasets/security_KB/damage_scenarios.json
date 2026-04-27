@@ -1,0 +1,56 @@
+{
+    "damage_scenarios": [
+        {
+            "id": "DS::Vehicle::LossOfControl",
+            "description": "Loss of vehicle motion control due to compromised actuator commands (braking, steering, torque)",
+            "applies_to_assets": [
+                "ASSET::VehicleKinematic_Control"
+            ],
+            "impact": {
+                "safety": "Severe",
+                "operational": "Severe",
+                "financial": "Major",
+                "privacy": "None"
+            }
+        },
+        {
+            "id": "DS::Battery::ThermalRunaway",
+            "description": "Unsafe battery behavior due to manipulated SoC/SoH or safety controls",
+            "applies_to_assets": [
+                "ASSET::Sensor_Data_Integrity"
+            ],
+            "impact": {
+                "safety": "Severe",
+                "operational": "Severe",
+                "financial": "Severe",
+                "privacy": "None"
+            }
+        },
+        {
+            "id": "DS::Vehicle::UnauthorizedFirmware",
+            "description": "Execution of malicious firmware via compromised OTA or diagnostic interface",
+            "applies_to_assets": [
+                "ASSET::OTA_Update_Chain"
+            ],
+            "impact": {
+                "safety": "Severe",
+                "operational": "Major",
+                "financial": "Major",
+                "privacy": "None"
+            }
+        },
+        {
+            "id": "DS::Privacy::DataExposure",
+            "description": "Exposure of user data such as location, contacts, and usage patterns",
+            "applies_to_assets": [
+                "ASSET::Personal_Mobility_Data"
+            ],
+            "impact": {
+                "safety": "Low",
+                "operational": "Low",
+                "financial": "Moderate",
+                "privacy": "Severe"
+            }
+        }
+    ]
+}

@@ -2,8 +2,8 @@
   "final_score": 100,
   "retry_attempt": 0,
   "nodes_count": 12,
-  "derivations_count": 21,
+  "derivations_count": 19,
   "threat_scenarios_count": 5,
-  "item_definition_details_count": 12,
+  "item_definition_details_count": 9,
   "passed_quality_check": true
 }

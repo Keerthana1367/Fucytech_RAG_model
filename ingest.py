@@ -14,7 +14,7 @@ from pypdf import PdfReader
 
 from components import (
     MITRE_MOBILE, MITRE_ICS, ATM_PATH, CAPEC_PATH, CWE_PATH,
-    ECU_PATH, ANNEX_PATH, CLAUSE_PATH, REPORTS_PATH, PDF_PATH, MAX_CHARS,
+    ECU_PATH, ANNEX_PATH, CLAUSE_PATH, REPORTS_PATH, SECURITY_KB_PATH, PDF_PATH, MAX_CHARS,
 )
 
 
@@ -479,6 +479,88 @@ def ingest_pdfs(pdf_dir) -> list[Document]:
     return docs
 
 
+def ingest_security_kb(kb_dir) -> list[Document]:
+    """Ingest structured security knowledge base files."""
+    docs = []
+    path = Path(kb_dir)
+    if not path.exists():
+        print(f"  Security KB folder not found: {kb_dir}")
+        return docs
+
+    # 1. Node-Asset Map
+    nam_path = path / "node_asset_map.json"
+    if nam_path.exists():
+        with open(nam_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            mapping = data.get("node_asset_mapping", [])
+            for item in mapping:
+                docs.append(Document(
+                    content=f"Security Mapping: Component '{item.get('node')}' maps to Asset '{item.get('asset')}'",
+                    meta={"source": "SECURITY_KB", "type": "node_asset_map"}
+                ))
+        print(f"  {nam_path.name}: Processed {len(mapping)} mappings.")
+
+    # 2. Trust Model
+    tm_path = path / "trust_model.json"
+    if tm_path.exists():
+        with open(tm_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            zones = data.get("trust_zones", [])
+            for zone in zones:
+                comp_str = ", ".join(zone.get("components", []))
+                docs.append(Document(
+                    content=f"Trust Zone [{zone.get('id')}]: {zone.get('description')}\nComponents: {comp_str}",
+                    meta={"source": "SECURITY_KB", "type": "trust_zone"}
+                ))
+            boundaries = data.get("trust_boundaries", [])
+            for tb in boundaries:
+                docs.append(Document(
+                    content=f"Trust Boundary [{tb.get('id')}]: From {tb.get('from')} to {tb.get('to')} via {tb.get('via')}\nRisk: {tb.get('risk')}\nControls: {', '.join(tb.get('controls', []))}",
+                    meta={"source": "SECURITY_KB", "type": "trust_boundary"}
+                ))
+        print(f"  {tm_path.name}: Processed {len(zones)} zones and {len(boundaries)} boundaries.")
+
+    # 3. Threat Scenarios
+    ts_path = path / "threat_scenarios.json"
+    if ts_path.exists():
+        with open(ts_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            scenarios = data.get("threat_scenarios", [])
+            for ts in scenarios:
+                assets = ", ".join(ts.get("applies_to_assets", []))
+                docs.append(Document(
+                    content=(
+                        f"Technical Threat Scenario [{ts.get('id')}]: {ts.get('attack')}\n"
+                        f"Entry Point: {ts.get('entry_point')}\n"
+                        f"Technique: {ts.get('technique')}\n"
+                        f"Applies to Assets: {assets}"
+                    ),
+                    meta={"source": "SECURITY_KB", "type": "threat_scenario"}
+                ))
+        print(f"  {ts_path.name}: Processed {len(scenarios)} threat scenarios.")
+
+    # 4. Damage Scenarios
+    ds_path = path / "damage_scenarios.json"
+    if ds_path.exists():
+        with open(ds_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            scenarios = data.get("damage_scenarios", [])
+            for ds in scenarios:
+                impact = ds.get("impact", {})
+                impact_str = ", ".join(f"{k}: {v}" for k, v in impact.items())
+                docs.append(Document(
+                    content=(
+                        f"Damage Scenario [{ds.get('id')}]: {ds.get('description')}\n"
+                        f"Applies to Assets: {', '.join(ds.get('applies_to_assets', []))}\n"
+                        f"Impact Ratings: {impact_str}"
+                    ),
+                    meta={"source": "SECURITY_KB", "type": "damage_scenario"}
+                ))
+        print(f"  {ds_path.name}: Processed {len(scenarios)} damage scenarios.")
+
+    return docs
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Master loader
 # ─────────────────────────────────────────────────────────────────────────────
@@ -509,8 +591,11 @@ def load_all_documents() -> list[Document]:
     print("\nLoading PDF regulations...")
     pdf_docs = ingest_pdfs(PDF_PATH)
 
+    print("\nLoading SECURITY KB...")
+    kb_custom_docs = ingest_security_kb(SECURITY_KB_PATH)
+
     all_docs  = ecu_docs + iso_docs + annex_docs
-    all_docs += mitre_docs + atm_docs + capec_docs + cwe_docs + reports_docs + kb_docs + pdf_docs
+    all_docs += mitre_docs + atm_docs + capec_docs + cwe_docs + reports_docs + kb_docs + pdf_docs + kb_custom_docs
 
     print(f"\n{'='*50}")
     print(f"Total documents: {len(all_docs)}")

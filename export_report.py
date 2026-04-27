@@ -25,7 +25,9 @@ def generate_markdown(tara_json, query):
 
     # 1. Assets / Architecture
     lines.append("## 1. System Architecture")
-    assets = tara_json.get("Assets", {})
+    assets_raw = tara_json.get("Assets", [{}])
+    assets = assets_raw[0] if isinstance(assets_raw, list) and assets_raw else (assets_raw if isinstance(assets_raw, dict) else {})
+    
     template = assets.get("template", {})
     nodes = template.get("nodes", [])
     details = template.get("details", [])
@@ -154,7 +156,7 @@ def generate_pdf(tara_json, query, output_path):
         [Paragraph("Field", table_header), Paragraph("Value", table_header)],
         ["ECU Name", query],
         ["ECU Type", "Automotive Controller"],
-        ["Vehicle System", "In-Vehicle Electronic System"],
+        ["Vehicle System", "High Voltage System" if "BMS" in query else "Chassis System"],
         ["Functions", "Critical control, monitoring and diagnostic services."],
         ["Interfaces", "CAN, Diagnostic (UDS)"],
         ["Environment", "Automotive In-Vehicle Network (IVN)"]
@@ -174,11 +176,19 @@ def generate_pdf(tara_json, query, output_path):
     # --- 2. Executive Summary ---
     story.append(Paragraph("2. Executive Summary", h1_style))
     
-    nodes = tara_json.get("Assets", {}).get("template", {}).get("nodes", [])
-    ds_details = tara_json.get("Damage_scenarios", [{}])[0].get("Details", [])
+    assets_raw = tara_json.get("Assets", [{}])
+    assets = assets_raw[0] if isinstance(assets_raw, list) and assets_raw else (assets_raw if isinstance(assets_raw, dict) else {})
+    nodes = assets.get("template", {}).get("nodes", [])
+    
+    ds_root = tara_json.get("Damage_scenarios", [{}])
+    ds_main = ds_root[0] if isinstance(ds_root, list) and ds_root else (ds_root if isinstance(ds_root, dict) else {})
+    ds_details = ds_main.get("Details", [])
+    
     ts_list = []
-    ts_root = tara_json.get("Threat_scenarios", [{}])[0].get("Details", [])
-    for group in ts_root:
+    ts_root = tara_json.get("Threat_scenarios", [{}])
+    ts_main = ts_root[0] if isinstance(ts_root, list) and ts_root else (ts_root if isinstance(ts_root, dict) else {})
+    ts_groups = ts_main.get("Details", [])
+    for group in ts_groups:
         ts_list.extend(group.get("Details", []))
     
     risk_counts = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0}
@@ -202,7 +212,7 @@ def generate_pdf(tara_json, query, output_path):
     story.append(Paragraph("3. Asset Identification", h1_style))
     asset_data = [[Paragraph(h, table_header) for h in ["Asset Id", "Asset Name", "Asset Type", "Cybersecurity Props", "Description"]]]
     
-    nodes_details = tara_json.get("Assets", {}).get("template", {}).get("details", [])
+    nodes_details = assets.get("template", {}).get("details", [])
     details_map = {d.get("nodeId"): d for d in nodes_details}
     
     for i, node in enumerate(nodes):

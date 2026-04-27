@@ -29,6 +29,7 @@ import hashlib
 
 import google.generativeai as genai
 from config import GEMINI_MODEL
+from export_report import generate_pdf
 
 # ── Config ──────────────────────────────────────────────────────────────────
 RESULTS_DIR  = os.path.join("outputs", "Results")
@@ -406,6 +407,18 @@ def main():
     print(f"  Skipped (cached)   : {skipped_count} trees")
     print(f"  Total with trees   : {total_with_trees}/{len(threat_scenarios)}")
     print(f"  Saved to           : {filepath}")
+    
+    # ── Regenerate PDF Report ──────────────────────────────────────────────
+    print(f"\n[Export] Regenerating professional PDF report...")
+    reports_dir = os.path.join("outputs", "Reports")
+    os.makedirs(reports_dir, exist_ok=True)
+    pdf_path = os.path.join(reports_dir, f"TARA_Report_{query.replace(' ', '_')}.pdf")
+    try:
+        if generate_pdf(tara, query, pdf_path):
+            print(f"  [Success] Updated PDF Report -> {pdf_path}")
+    except Exception as e:
+        print(f"  [Error] PDF regeneration failed: {e}")
+
     if total_with_trees < len(threat_scenarios):
         remaining = len(threat_scenarios) - total_with_trees
         print(f"\n  ℹ️  {remaining} trees still pending. Re-run to continue:")

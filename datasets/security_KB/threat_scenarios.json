@@ -1,0 +1,49 @@
+{
+    "threat_scenarios": [
+        {
+            "id": "TS::CAN::Injection_OBD",
+            "entry_point": "OBD-II",
+            "attack": "Injection of spoofed CAN frames",
+            "technique": "Sending crafted CAN IDs without SecOC authentication",
+            "applies_to_assets": [
+                "ASSET::VehicleKinematic_Control"
+            ]
+        },
+        {
+            "id": "TS::Ethernet::DoIP_Abuse",
+            "entry_point": "Ethernet",
+            "attack": "Unauthorized diagnostic access",
+            "technique": "UDS SecurityAccess bypass or brute-force over DoIP",
+            "applies_to_assets": [
+                "ASSET::Vehicle_Diagnostic_Access"
+            ]
+        },
+        {
+            "id": "TS::SPI::SensorManipulation",
+            "entry_point": "Physical access",
+            "attack": "Injection or replay of sensor data over SPI",
+            "technique": "Manipulating raw SPI signals to alter sensor readings",
+            "applies_to_assets": [
+                "ASSET::Sensor_Data_Integrity"
+            ]
+        },
+        {
+            "id": "TS::OTA::MaliciousUpdate",
+            "entry_point": "Cellular backend",
+            "attack": "Delivery of malicious firmware update",
+            "technique": "Compromised signing keys or downgrade attack",
+            "applies_to_assets": [
+                "ASSET::OTA_Update_Chain"
+            ]
+        },
+        {
+            "id": "TS::IVI::RemoteExploit",
+            "entry_point": "Wi-Fi / Bluetooth",
+            "attack": "Remote code execution in infotainment system",
+            "technique": "Exploiting vulnerabilities in OS or middleware",
+            "applies_to_assets": [
+                "ASSET::Personal_Mobility_Data"
+            ]
+        }
+    ]
+}

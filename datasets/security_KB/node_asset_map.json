@@ -1,0 +1,44 @@
+{
+    "node_asset_mapping": [
+        {
+            "node": "ABS::CP::HydraulicValves",
+            "asset": "ASSET::VehicleKinematic_Control"
+        },
+        {
+            "node": "EPS::CP::MotorDriver",
+            "asset": "ASSET::VehicleKinematic_Control"
+        },
+        {
+            "node": "VCU::CP::TorqueArbitration",
+            "asset": "ASSET::VehicleKinematic_Control"
+        },
+        {
+            "node": "BMS::CP::SoC",
+            "asset": "ASSET::Sensor_Data_Integrity"
+        },
+        {
+            "node": "BMS::CP::BatterySafety",
+            "asset": "ASSET::Sensor_Data_Integrity"
+        },
+        {
+            "node": "ADAS::AP::SensorInterfaces",
+            "asset": "ASSET::Sensor_Data_Integrity"
+        },
+        {
+            "node": "ADAS::AP::PerceptionApp",
+            "asset": "ASSET::Sensor_Data_Integrity"
+        },
+        {
+            "node": "TCU::AP::OTAClient",
+            "asset": "ASSET::OTA_Update_Chain"
+        },
+        {
+            "node": "GW::CP::DiagnosticGateway",
+            "asset": "ASSET::Vehicle_Diagnostic_Access"
+        },
+        {
+            "node": "IVI::AP::Machine",
+            "asset": "ASSET::Personal_Mobility_Data"
+        }
+    ]
+}
