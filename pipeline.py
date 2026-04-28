@@ -1004,49 +1004,6 @@ def evaluate(state: RAGState):
             
     threat_scenarios_details = derived_ts_details
 
-    # ── EXTRACT Damage Scenarios ──
-    raw_ds_data = state.get("damage_details", [])
-    ds_derivations = []
-    user_defined_ds_details = []
-    
-    if isinstance(raw_ds_data, list):
-        for block in raw_ds_data:
-            if not isinstance(block, dict): continue
-            btype = block.get("type", "").lower()
-            if btype == "derived":
-                ds_derivations = block.get("Derivations", [])
-            elif btype == "user-defined":
-                user_defined_ds_details = block.get("Details", [])
-            else:
-                # Fallback for older agent format
-                user_defined_ds_details.append(block)
-
-    # ── CLEAN UP IDs for React Flow Compatibility ──
-    for row in derived_ts_details:
-        if "Details" in row:
-            for item in row["Details"]:
-                item["nodeId"] = _remap(item.get("nodeId"))
-                for p in item.get("props", []):
-                    if not re.match(r'^[0-9a-f]{8}-', str(p.get("id", ""))):
-                        p["id"] = str(uuid.uuid4())
-
-    for dd in user_defined_ds_details:
-        if "cyberLosses" in dd:
-            for cl in dd["cyberLosses"]:
-                cl["nodeId"] = _remap(cl.get("nodeId"))
-                if not cl.get("id") or not re.match(r'^[0-9a-f]{8}-', str(cl.get("id", ""))):
-                    cl["id"] = str(uuid.uuid4())
-        
-        # Clean the new nested Details array
-        if "Details" in dd:
-            for detail in dd["Details"]:
-                detail["nodeId"] = _remap(detail.get("nodeId"))
-                for p in detail.get("props", []):
-                    if not re.match(r'^[0-9a-f]{8}-', str(p.get("id", ""))):
-                        p["id"] = str(uuid.uuid4())
-
-        
-
     # ── BUILD Assets[0].Details: node + edge property list (matches bms_1.json) ──
     # This is the CRITICAL structure the frontend expects.
     # It includes BOTH nodes (type=default/data) and edges (type=step).
@@ -1074,6 +1031,60 @@ def evaluate(state: RAGState):
                 "props": [{"name": p, "id": str(uuid.uuid4())} for p in edge.get("properties", [])]
             })
         first_asset["Details"] = asset_details
+
+    # ── EXTRACT Damage Scenarios ──
+    raw_ds_data = state.get("damage_details", [])
+    ds_derivations = []
+    user_defined_ds_details = []
+    
+    if isinstance(raw_ds_data, list):
+        for block in raw_ds_data:
+            if not isinstance(block, dict): continue
+            btype = block.get("type", "").lower()
+            if btype == "derived":
+                ds_derivations = block.get("Derivations", [])
+            elif btype == "user-defined":
+                user_defined_ds_details = block.get("Details", [])
+            else:
+                # Fallback for older agent format
+                user_defined_ds_details.append(block)
+
+    # ── CLEAN UP IDs for React Flow Compatibility ──
+    for row in derived_ts_details:
+        if "Details" in row:
+            for item in row["Details"]:
+                item["nodeId"] = _remap(item.get("nodeId"))
+                for p in item.get("props", []):
+                    if not re.match(r'^[0-9a-f]{8}-', str(p.get("id", ""))):
+                        p["id"] = str(uuid.uuid4())
+
+    # ── BUILD prop_id_map for consistency ──
+    prop_id_map = {}
+    for detail in first_asset.get("Details", []):
+        nid = detail.get("nodeId")
+        for p in detail.get("props", []):
+            prop_id_map[(nid, p["name"])] = p["id"]
+
+    for dd in user_defined_ds_details:
+        # First remap nodeId in cyberLosses
+        if "cyberLosses" in dd:
+            for cl in dd["cyberLosses"]:
+                cl["nodeId"] = _remap(cl.get("nodeId"))
+                # Lookup consistent ID from prop_id_map
+                mapped_id = prop_id_map.get((cl["nodeId"], cl.get("name")))
+                if mapped_id:
+                    cl["id"] = mapped_id
+                elif not cl.get("id") or not re.match(r'^[0-9a-f]{8}-', str(cl.get("id", ""))):
+                    cl["id"] = str(uuid.uuid4())
+        
+        # Clean the new nested Details array if any
+        if "Details" in dd:
+            for detail in dd["Details"]:
+                detail["nodeId"] = _remap(detail.get("nodeId"))
+
+
+
+
 
     # ── BUILD Damage_scenarios.Derivations: one per prop per node/edge ──
     # This matches the golden ref: DS001="loss of Integrity for BatteryPack", etc.
@@ -1138,6 +1149,7 @@ def evaluate(state: RAGState):
                 "model_id": mid,
                 "type": "Derived",
                 "Derivations": ds_derivations,
+                "Details": first_asset.get("Details", []),
                 "user_id": uid
             },
             {
@@ -1148,7 +1160,6 @@ def evaluate(state: RAGState):
                     {
                         "Description": ds.get("Description", ds.get("description", "No description available.")),
                         "Name": ds.get("Name", ds.get("name", "Unnamed Scenario")),
-                        "props": ds.get("props", []),
                         "cyberLosses": ds.get("cyberLosses", ds.get("cyberlosses", [])),
                         "impacts": ds.get("impacts", {
                             "Financial Impact": "Moderate",
@@ -1159,8 +1170,7 @@ def evaluate(state: RAGState):
                         "key": i + 1,
                         "_id": ds.get("_id", ds.get("id", str(uuid.uuid4())))
                     } for i, ds in enumerate(user_defined_ds_details)
-                ],
-                "user_id": uid
+                ]
             }
         ],
         "Threat_scenarios": [
