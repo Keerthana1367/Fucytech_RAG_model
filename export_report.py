@@ -39,10 +39,13 @@ def generate_markdown(tara_json, query):
         node_id = node.get("id")
         data = node.get("data", {})
         label = data.get("label", node_id)
+        label = node.get("data", {}).get("label", "Unknown")
         ntype = node.get("type", "default")
         detail = details_map.get(node_id, {})
-        desc = detail.get("desc", "No description provided.")
-        props = [p.get("name") if isinstance(p, dict) else p for p in detail.get("props", [])]
+        desc = detail.get("desc") or detail.get("Description") or "No description provided."
+        # Support both 'props' and 'properties' keys
+        raw_props = detail.get("props") or node.get("properties") or []
+        props = [p.get("name") if isinstance(p, dict) else p for p in raw_props]
         props_str = ", ".join(props) if props else "None"
         lines.append(f"| {label} | {ntype} | {desc} | {props_str} |")
     lines.append("\n")
@@ -50,43 +53,43 @@ def generate_markdown(tara_json, query):
     # 2. Damage Scenarios
     lines.append("## 2. Damage Assessment")
     ds_root = tara_json.get("Damage_scenarios", [])
-    if ds_root and isinstance(ds_root, list):
-        ds_main = ds_root[0]
-        scenarios = ds_main.get("Details", [])
-        for ds in scenarios:
-            lines.append(f"#### {ds.get('Name')}")
-            lines.append(f"- **Description**: {ds.get('Description')}")
-            impacts = ds.get("impacts", {})
-            impact_str = ", ".join([f"{k}: {v}" for k, v in impacts.items() if v])
-            lines.append(f"- **Impact Ratings**: {impact_str}")
-            losses = ds.get("cyberLosses", [])
-            loss_list = [f"{l.get('name')} on {l.get('node')}" for l in losses]
-            lines.append(f"- **Cyber Losses**: {', '.join(loss_list)}")
-            lines.append("\n")
+    # Find the User-defined block (not Derived)
+    user_defined_ds = []
+    if isinstance(ds_root, list):
+        for block in ds_root:
+            if block.get("type") == "User-defined":
+                user_defined_ds = block.get("Details", [])
+                break
+    for ds in user_defined_ds:
+        lines.append(f"#### {ds.get('Name')}")
+        lines.append(f"- **Description**: {ds.get('Description')}")
+        impacts = ds.get("impacts", {})
+        impact_str = ", ".join([f"{k}: {v}" for k, v in impacts.items() if v])
+        lines.append(f"- **Impact Ratings**: {impact_str}")
+        losses = ds.get("cyberLosses", [])
+        loss_list = [f"{l.get('name')} on {l.get('node')}" for l in losses]
+        lines.append(f"- **Cyber Losses**: {', '.join(loss_list)}")
+        lines.append("\n")
 
     # 3. Threat Scenarios
     lines.append("## 3. Threat Analysis & Attack Vectors")
-    ts_root = tara_json.get("Threat_scenarios", [])
-    if ts_root and isinstance(ts_root, list):
-        ts_main = ts_root[0]
-        ts_groups = ts_main.get("Details", [])
-        for group in ts_groups:
-            ds_id = group.get("id", "Global")
-            lines.append(f"### Threats linked to {ds_id}")
-            for ts in group.get("Details", []):
-                lines.append(f"#### TS: {ts.get('name')}")
-                lines.append(f"- **Category**: {ts.get('category')}")
-                lines.append(f"- **Description**: {ts.get('description')}")
-                lines.append(f"- **Asset at Risk**: {ts.get('asset')} ({ts.get('nodeId')})")
-                tree = ts.get("attack_tree")
-                if tree:
-                    lines.append("\n**Attack Tree Summary:**")
-                    lines.append(f"  - **Primary Goal**: {tree.get('goal')}")
-                    for vector in tree.get("children", []):
-                        lines.append(f"    - **Vector**: {vector.get('goal')}")
-                        for method in vector.get("children", []):
-                            lines.append(f"      - **Method**: {method.get('goal')}")
-                lines.append("\n")
+    threats = extract_threat_scenarios(tara_json)
+    for ts in threats:
+        lines.append(f"#### TS: {ts.get('name', 'N/A')}")
+        lines.append(f"- **ID**: {ts.get('short_id', ts.get('id', 'N/A'))}")
+        lines.append(f"- **Category**: {ts.get('category', 'N/A')}")
+        lines.append(f"- **Description**: {ts.get('description', 'N/A')}")
+        lines.append(f"- **Asset at Risk**: {ts.get('asset', 'N/A')} ({ts.get('nodeId', 'N/A')})")
+        lines.append(f"- **Cyber Loss**: {ts.get('cybersecurity_loss', 'N/A')}")
+        tree = ts.get("attack_tree")
+        if tree:
+            lines.append("\n**Attack Tree Summary:**")
+            lines.append(f"  - **Primary Goal**: {tree.get('goal')}")
+            for vector in tree.get("children", []):
+                lines.append(f"    - **Vector**: {vector.get('goal')}")
+                for method in vector.get("children", []):
+                    lines.append(f"      - **Method**: {method.get('goal')}")
+        lines.append("\n")
     return "\n".join(lines)
 
 def draw_background(canvas, doc):
@@ -106,6 +109,145 @@ def get_risk_level(impacts):
     if max_val == 3: return "High"
     if max_val == 2: return "Medium"
     return "Low"
+
+STRIDE_MAP = {
+    "integrity": "Tampering",
+    "confidentiality": "Information Disclosure",
+    "availability": "Denial of Service",
+    "authenticity": "Spoofing",
+    "authorization": "Elevation of Privilege",
+    "non-repudiation": "Repudiation"
+}
+
+def extract_threat_scenarios(tara_json):
+    """Unified threat extraction to handle various JSON structures."""
+    ts_root = tara_json.get("Threat_scenarios", [])
+    if not ts_root:
+        return []
+        
+    # Build maps for enrichment
+    derived_prop_map = {}
+    derived_row_map = {} # Using rowId as the most stable link
+    
+    for block in ts_root:
+        if isinstance(block, dict) and block.get("type").lower() == "derived":
+            for group in block.get("Details", []):
+                ds_id = group.get("id")
+                # Group rowId
+                g_row_id = group.get("rowId")
+                for detail in group.get("Details", []):
+                    node_name = detail.get("node")
+                    node_id = detail.get("nodeId")
+                    # Threat detail rowId
+                    row_id = detail.get("rowId") or g_row_id
+                    attack_tree = detail.get("attack_tree")
+                    
+                    ref_data = {
+                        "ds_id": ds_id,
+                        "node": node_name,
+                        "node_id": node_id,
+                        "attack_tree": attack_tree,
+                        "props": detail.get("props", [])
+                    }
+                    
+                    if row_id:
+                        derived_row_map[row_id] = ref_data
+                    
+                    for prop in detail.get("props", []):
+                        prop_id = prop.get("id")
+                        derived_prop_map[prop_id] = {
+                            "ds_id": ds_id,
+                            "row_id": row_id,
+                            "node": node_name,
+                            "node_id": node_id,
+                            "prop_name": prop.get("name"),
+                            "attack_tree": attack_tree
+                        }
+                        
+    # Build attack tree map from global Attacks section (as secondary source)
+    attack_map = {}
+    attacks = tara_json.get("Attacks", [])
+    if attacks and isinstance(attacks, list):
+        for scene in attacks[0].get("scenes", []):
+            t_id = scene.get("threat_id")
+            if t_id:
+                # Use 'tree' (hierarchical) or 'templates' (RF)
+                attack_map[t_id] = scene.get("tree") or scene.get("templates")
+
+    # Try User-defined first
+    user_defined_details = []
+    for block in ts_root:
+        if isinstance(block, dict) and block.get("type") == "User-defined":
+            user_defined_details = block.get("Details", [])
+            break
+            
+    results = []
+    if user_defined_details:
+        for i, ts in enumerate(user_defined_details):
+            enriched = ts.copy()
+            # Assign sequential ID
+            enriched["short_id"] = f"TS{i+1:03}"
+            
+            t_id = ts.get("id") or ts.get("_id")
+            if t_id in attack_map:
+                enriched["attack_tree"] = attack_map[t_id]
+                
+            t_ids = ts.get("threat_ids", [])
+            if t_ids:
+                # 1. Try rowId linking (Most reliable in ABS JSON)
+                rid = t_ids[0].get("rowId")
+                ref_from_row = derived_row_map.get(rid)
+                
+                if ref_from_row:
+                    ref = {
+                        "ds_id": ref_from_row["ds_id"],
+                        "node": ref_from_row["node"],
+                        "node_id": ref_from_row.get("node_id"),
+                        "attack_tree": ref_from_row["attack_tree"],
+                        "prop_name": ref_from_row["props"][0].get("name") if ref_from_row["props"] else "N/A"
+                    }
+                else:
+                    # 2. Fallback to propId linking
+                    ref = derived_prop_map.get(t_ids[0].get("propId"))
+                
+                if ref:
+                    enriched["asset"] = enriched.get("asset") or ref["node"]
+                    enriched["nodeId"] = enriched.get("nodeId") or ref.get("node_id")
+                    enriched["cybersecurity_loss"] = enriched.get("cybersecurity_loss") or ref["prop_name"]
+                    enriched["damage_scenario"] = enriched.get("damage_scenario") or ref["ds_id"]
+                    enriched["attack_tree"] = enriched.get("attack_tree") or ref.get("attack_tree")
+                    # Case-insensitive lookup for STRIDE
+                    loss_key = ref["prop_name"].lower() if ref["prop_name"] else ""
+                    enriched["category"] = enriched.get("category") or STRIDE_MAP.get(loss_key, "N/A")
+            
+            # Ensure no Nones
+            enriched["asset"] = enriched.get("asset") or "N/A"
+            enriched["cybersecurity_loss"] = enriched.get("cybersecurity_loss") or "N/A"
+            enriched["category"] = enriched.get("category") or "N/A"
+            
+            results.append(enriched)
+    else:
+        # Fallback to derived
+        for block in ts_root:
+            if isinstance(block, dict) and block.get("type") == "derived":
+                for group in block.get("Details", []):
+                    ds_id = group.get("id")
+                    for detail in group.get("Details", []):
+                        for prop in detail.get("props", []):
+                            prop_name = prop.get("name", "N/A")
+                            results.append({
+                                "short_id": f"TS{len(results)+1:03}",
+                                "id": f"TS-{ds_id}-{prop.get('key', 1)}",
+                                "name": detail.get("name", "Threat Scenario"),
+                                "asset": detail.get("node"),
+                                "nodeId": detail.get("nodeId"),
+                                "cybersecurity_loss": prop_name,
+                                "description": f"Potential loss of {prop_name} for {detail.get('node')}.",
+                                "category": STRIDE_MAP.get(prop_name.lower(), "N/A"),
+                                "damage_scenario": ds_id,
+                                "attack_tree": detail.get("attack_tree") or attack_map.get(detail.get("nodeId"))
+                            })
+    return results
 
 def generate_pdf(tara_json, query, output_path):
     """Converts TARA JSON to a premium dark-themed PDF report."""
@@ -180,16 +322,16 @@ def generate_pdf(tara_json, query, output_path):
     assets = assets_raw[0] if isinstance(assets_raw, list) and assets_raw else (assets_raw if isinstance(assets_raw, dict) else {})
     nodes = assets.get("template", {}).get("nodes", [])
     
-    ds_root = tara_json.get("Damage_scenarios", [{}])
-    ds_main = ds_root[0] if isinstance(ds_root, list) and ds_root else (ds_root if isinstance(ds_root, dict) else {})
-    ds_details = ds_main.get("Details", [])
+    # Extract User-defined damage scenario details (not Derived architecture nodes)
+    ds_root = tara_json.get("Damage_scenarios", [])
+    ds_details = []
+    if isinstance(ds_root, list):
+        for block in ds_root:
+            if isinstance(block, dict) and block.get("type") == "User-defined":
+                ds_details = block.get("Details", [])
+                break
     
-    ts_list = []
-    ts_root = tara_json.get("Threat_scenarios", [{}])
-    ts_main = ts_root[0] if isinstance(ts_root, list) and ts_root else (ts_root if isinstance(ts_root, dict) else {})
-    ts_groups = ts_main.get("Details", [])
-    for group in ts_groups:
-        ts_list.extend(group.get("Details", []))
+    ts_list = extract_threat_scenarios(tara_json)
     
     risk_counts = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0}
     for ds in ds_details:
@@ -212,7 +354,14 @@ def generate_pdf(tara_json, query, output_path):
     story.append(Paragraph("3. Asset Identification", h1_style))
     asset_data = [[Paragraph(h, table_header) for h in ["Asset Id", "Asset Name", "Asset Type", "Cybersecurity Props", "Description"]]]
     
-    nodes_details = assets.get("template", {}).get("details", [])
+    # Check both template.details and top-level Details for asset property info
+    nodes_details = assets.get("template", {}).get("details", []) or assets.get("Details", [])
+    # Also check Damage_scenarios Derived block for Details
+    if not nodes_details and isinstance(ds_root, list):
+        for block in ds_root:
+            if isinstance(block, dict) and block.get("type") == "Derived":
+                nodes_details = block.get("Details", [])
+                break
     details_map = {d.get("nodeId"): d for d in nodes_details}
     
     for i, node in enumerate(nodes):
@@ -277,22 +426,24 @@ def generate_pdf(tara_json, query, output_path):
     ts_headers = [Paragraph(h, table_header) for h in ["Threat Id", "Threat Name", "Targeted Asset", "Loss of Property", "Description", "Stride", "Vector"]]
     ts_table_data = [ts_headers]
     
-    unique_ts = {}
-    for group in ts_root:
-        for ts in group.get("Details", []):
-            ts_id = ts.get("id")
-            if ts_id not in unique_ts:
-                unique_ts[ts_id] = ts
-                
-    for ts_id, ts in unique_ts.items():
+    for ts in ts_list:
         vector = "Adjacent"
         tree = ts.get("attack_tree", {})
-        if tree.get("children"):
+        
+        # Check both hierarchical 'children' and React Flow 'nodes'
+        if isinstance(tree, dict) and tree.get("children"):
             vector = tree["children"][0].get("goal", "Adjacent")
-            if len(vector) > 30: vector = vector[:27] + "..."
+        elif isinstance(tree, dict) and tree.get("nodes"):
+            # Fallback for React Flow structure
+            for node in tree["nodes"]:
+                if node.get("level") == 1 or "Vector" in node.get("data", {}).get("label", ""):
+                    vector = node["data"]["label"]
+                    break
+        
+        if len(vector) > 30: vector = vector[:27] + "..."
             
         ts_table_data.append([
-            Paragraph(ts_id, table_text),
+            Paragraph(ts.get("short_id", "N/A"), table_text),
             Paragraph(ts.get("name", "N/A"), table_text),
             Paragraph(ts.get("asset", "N/A"), table_text),
             Paragraph(ts.get("cybersecurity_loss", "N/A"), table_text),
@@ -319,26 +470,37 @@ def generate_pdf(tara_json, query, output_path):
     # Logic to check if "Tools Required" should be shown
     has_tools = False
     ap_data_raw = []
-    for i, (ts_id, ts) in enumerate(unique_ts.items()):
+    for i, ts in enumerate(ts_list):
         steps = []
         tree = ts.get("attack_tree", {})
         tools = []
         # Basic heuristic to extract tools from goal descriptions
         tool_keywords = ["JTAG", "SWD", "CANalyzer", "Busmaster", "Debugger", "Sniffer", "Glitching"]
         
-        for vector in tree.get("children", []):
-            for method in vector.get("children", []):
-                goal = method.get("goal", "")
-                steps.append(goal)
-                for kw in tool_keywords:
-                    if kw.lower() in goal.lower() and kw not in tools:
-                        tools.append(kw)
+        if isinstance(tree, dict) and tree.get("children"):
+            for vector in tree.get("children", []):
+                for method in vector.get("children", []):
+                    goal = method.get("goal", "")
+                    steps.append(goal)
+                    for kw in tool_keywords:
+                        if kw.lower() in goal.lower() and kw not in tools:
+                            tools.append(kw)
+        elif isinstance(tree, dict) and tree.get("nodes"):
+            # Support for React Flow structure (flat list of nodes)
+            for node in tree.get("nodes", []):
+                label = node.get("data", {}).get("label", "")
+                # Heuristic: deep nodes (methods) often have long descriptions
+                if node.get("level") == 2 or len(label) > 30:
+                    steps.append(label)
+                    for kw in tool_keywords:
+                        if kw.lower() in label.lower() and kw not in tools:
+                            tools.append(kw)
         
         if tools: has_tools = True
         
         ap_data_raw.append({
             "path_id": f"AP{i+1:03}",
-            "threat_id": ts_id,
+            "threat_id": ts.get("short_id", "N/A"),
             "feasibility": "Medium", # Default
             "tools": "; ".join(tools) if tools else "",
             "steps": " ".join([f"Step {j+1}: {s};" for j, s in enumerate(steps[:3])])
@@ -381,22 +543,49 @@ def generate_pdf(tara_json, query, output_path):
     
     impact_num = {"Critical": 5, "High": 4, "Medium": 3, "Low": 2, "Negligible": 1}
     
-    for i, (ts_id, ts) in enumerate(unique_ts.items()):
+    for i, ts in enumerate(ts_list):
         # Map back to damage scenario impact
-        ds_id_raw = ts.get("damage_scenario", "DS001")
-        ds_id = ds_id_raw.split("]")[0].replace("[", "") if "]" in ds_id_raw else "DS001"
+        ds_id = "DS001"
+        ts_asset = ts.get("asset", "N/A")
+        ts_loss = ts.get("cybersecurity_loss", "N/A")
+        ts_name = ts.get("name", "").lower()
+            
+        # Try to find which DS covers this property (Asset + Loss match)
+        for j, ds in enumerate(ds_details):
+            found = False
+            # Factor 1: Cyber Loss Match (Asset + Loss)
+            for loss in ds.get("cyberLosses", []):
+                loss_node = loss.get("node", "")
+                loss_name = loss.get("name", "")
+                if (loss_node == ts_asset) and (loss_name == ts_loss):
+                    ds_id = f"DS{j+1:03}"
+                    found = True
+                    break
+            if found: break
+            
+            # Factor 2: Name Keyword Match (Fallback)
+            ds_name = ds.get("Name", "").lower()
+            if ds_name:
+                # Check for significant keyword overlap
+                keywords = ["firmware", "tampering", "injection", "spoof", "dos", "denial", "extraction", "key", "replay"]
+                match_count = 0
+                for kw in keywords:
+                    if kw in ds_name and kw in ts_name:
+                        match_count += 1
+                if match_count >= 1:
+                    ds_id = f"DS{j+1:03}"
+                    break
         
-        # Determine risk level correctly by matching DS Name in TS data
+        # Determine risk level correctly
         risk_level = "High"
-        ds_name_target = ts.get("damage_scenario", "")
         for ds in ds_details:
-             if ds.get("Name") and ds.get("Name") in ds_name_target:
+             if ds_id == f"DS{ds_details.index(ds)+1:03}":
                  risk_level = get_risk_level(ds.get("impacts", {}))
                  break
         
         risk_table_data.append([
             Paragraph(f"R{i+1:03}", table_text),
-            Paragraph(ts_id, table_text),
+            Paragraph(ts.get("short_id", "N/A"), table_text),
             Paragraph(ds_id, table_text),
             Paragraph(risk_level, table_text),
             Paragraph(str(impact_num.get(risk_level, 3)), table_text),

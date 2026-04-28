@@ -54,7 +54,7 @@ Design a professional-grade system architecture for "{{ question }}" with exactl
 
 ### ARCHITECTURE RULES:
 
-5. **HIERARCHY & REQUIRED COMPONENTS** — Use group containers and specific components:
+1. **HIERARCHY & REQUIRED COMPONENTS** — Use group containers and specific components:
    - For the target system, you must include ALL components and interfaces listed in the provided REFERENCE CONTEXT and ECU HINTS.
    - You MUST include relevant data nodes (e.g. `SensorData`, `ControlSignals`, `SystemStatus`) as explicit components using `type: "data"`.
    - `type:"group"` nodes are invisible containers (dashed border, no solid backgroundColor).
@@ -87,7 +87,16 @@ Design a professional-grade system architecture for "{{ question }}" with exactl
    - `type`: Same as the node's type ("default" or "data")
    - `props`: List of cybersecurity properties with unique IDs (e.g., `"p-cellmon-integ"`)
 
-6. **COLOR CODING** by role:
+6. **NAMING RULE**:
+   - Do NOT use generic names like "Keys", "code flash","Component", "Module", "Unit"
+   - Use specific automotive names (e.g., "ABS MCU", "Wheel Speed Sensor", "CAN Transceiver", "Hydraulic Control Unit", "Cryptographic Keys","Firmware (Flash Memory)")
+   - Be specific and use knowledge base(datasets) and when user queries give specific to that ecu only dont invent or add any thing other than that ecu related only strictly
+
+7. **SECURITY AWARENESS**:
+    - Identify components that are security-critical (e.g., Firmware, Keys, Debug Ports)
+    - Ensure they are explicitly modeled as nodes
+
+8. **COLOR CODING** by role:
    - Monitoring/sensing: yellow shades (`#e6df19`, `#accd32`)
    - I/O interfaces: beige/tan (`#e2dfc1`)
    - Flash/storage: purple (`#ccc8ea`)
@@ -96,10 +105,10 @@ Design a professional-grade system architecture for "{{ question }}" with exactl
    - Data items: light yellow (`#e3e896`)
    - External/generic: gray (`#dadada`)
 
-7. **PROPERTIES** — Assign realistic subsets from:
+9. **PROPERTIES** — Assign realistic subsets from:
    `Integrity`, `Confidentiality`, `Authenticity`, `Authorization`, `Availability`, `Non-repudiation`
 
-8. **LAYOUT** — Assign non-overlapping positions:
+10. **LAYOUT** — Assign non-overlapping positions:
     - Groups: large bounding boxes (e.g., 800×500 px)
     - Components: spread within groups (x: 100–900, y: 50–500)
     - No two nodes at the same position. No node at (0, 0).
@@ -258,6 +267,12 @@ Generate exactly {{ max_threats }} high-priority technical threats, each targeti
 
 5. **REASONING**: Ground threats in real attack patterns from CWE, CAPEC, or MITRE ATT&CK when available from the context.
 
+6. **CONSTRAINTS**:
+    - Always ground outputs in the given architecture
+    - Prefer context over generation
+    - If generating, stay within automotive domain (CAN, UDS, OTA, SPI, etc.)
+    - Maintain consistency across outputs
+
 ### OUTPUT FORMAT:
 Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `{`.
 
@@ -338,10 +353,6 @@ Return ONLY a valid JSON object. No markdown fences. No commentary. Start with `
     {
       "Description": "Detailed scenario analysis...",
       "Name": "Scenario Name",
-      "props": [
-        { "name": "Integrity", "id": "<prop-id>" },
-        { "name": "Confidentiality", "id": "<prop-id>" }
-      ],
       "cyberLosses": [
         {
           "id": "<prop-id>",
