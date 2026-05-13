@@ -1,0 +1,1132 @@
+{
+  "metadata": {
+    "ecu_id": "SVS_1",
+    "version": "1.0",
+    "category": "Surround_View_System",
+    "standards_referenced": [
+      "AUTOSAR_AP_R25-11",
+      "ISO21434:2021",
+      "ISO26262:2018",
+      "UNECE_R155",
+      "ISO_17387:2008",
+      "SAE_J3016_202104",
+      "SAE_J3061_2021",
+      "ENISA_Smart_Cars_2019",
+      "ENISA_AI_Cybersecurity_2021",
+      "ENISA_JRC_Cybersecurity_Challenges",
+      "WP2016_Good_Practices_Smart_Cars",
+      "GRVA_11_33e_Automated_Driving",
+      "en_302571_ITS_Radio",
+      "8021AS_2020_TimeSync"
+    ],
+    "purpose": "RAG knowledge base for TARA pipeline \u2014 Surround View System ECU domain knowledge",
+    "last_updated": "2026",
+    "notes": "Enriched with AUTOSAR AP functional clusters, ISO-17387 surround detection, ENISA automotive threat landscape, SAE J3016 L0-L1 automation context. Covers 360-degree camera-based surround view, bird-eye-view synthesis, parking assist, and blind-spot monitoring."
+  },
+  "ecu_overview": {
+    "full_name": "Surround View System ECU",
+    "type": "perception_and_visualization",
+    "platform": "AUTOSAR_Adaptive_Platform",
+    "automation_level": {
+      "sae_j3016": "L0_to_L1",
+      "description": "No automation to driver assistance \u2014 system provides 360-degree visual awareness and parking/maneuvering alerts; driver retains full control at all times",
+      "l0_features": [
+        "360_degree_bird_eye_view_display",
+        "blind_spot_visualization",
+        "obstacle_proximity_overlay",
+        "rear_cross_traffic_alert_display"
+      ],
+      "l1_features": [
+        "parking_guidance_lines",
+        "automatic_camera_switching_on_indicator",
+        "dynamic_trajectory_overlay"
+      ]
+    },
+    "asil": "B",
+    "functional_safety_standard": "ISO26262",
+    "cybersecurity_standard": "ISO21434",
+    "primary_function": "Captures real-time video from four or more wide-angle cameras (front, rear, left, right) mounted around the vehicle perimeter, performs image stitching and homographic projection to generate a synthetic bird's-eye-view (BEV), and displays a seamless 360-degree composite image to the driver for parking assistance, low-speed maneuvering, and blind-spot monitoring.",
+    "core_pipeline": "Cameras -> ISP -> Undistortion -> Homography -> Image Stitching -> BEV Synthesis -> Overlay Rendering -> HMI Display",
+    "operating_environment": "Low-speed maneuvering, parking, reversing, lane change at low speed, urban environments; real-time image processing under variable lighting conditions",
+    "key_characteristics": [
+      "Camera-only perception \u2014 typically 4 to 8 fisheye cameras (180-degree FOV each)",
+      "Real-time image stitching and perspective transformation",
+      "Runs on embedded SoC with ISP and GPU for image processing",
+      "Service-oriented architecture via AUTOSAR AP",
+      "Connected to HMI/display ECU and parking assist ECUs",
+      "Governed by ISO-17387 lane-change and surround monitoring requirements",
+      "Tight synchronization required across all cameras \u2014 governed by IEEE 802.1AS (gPTP)"
+    ]
+  },
+  "hardware": {
+    "mcu": "Embedded SoC with multi-channel ISP (Image Signal Processor) and GPU for real-time image stitching and BEV rendering",
+    "processing_units": [
+      {
+        "unit": "CPU_cluster",
+        "role": "AUTOSAR AP OS execution, service orchestration, and application logic"
+      },
+      {
+        "unit": "ISP_Image_Signal_Processor",
+        "role": "Per-camera hardware image pipeline \u2014 lens distortion correction, noise reduction, white balance, HDR tone mapping"
+      },
+      {
+        "unit": "GPU_2D3D_Accelerator",
+        "role": "Homographic transformation, image stitching, BEV synthesis, overlay rendering in real time"
+      },
+      {
+        "unit": "HSM",
+        "role": "Cryptographic operations and key storage \u2014 supports ara::crypto for secure boot and communication"
+      }
+    ],
+    "sensors": [
+      {
+        "id": "front_fisheye_camera",
+        "type": "wide_angle_fisheye_camera",
+        "interface": "MIPI_CSI2",
+        "autosar_interface": "Sensor_Interface_RawDataStream",
+        "function": "Captures front 180-degree view for front obstacle detection and front BEV sector",
+        "data_type": "raw_video_frames_fisheye",
+        "bandwidth": "high",
+        "resolution": "1920x1080_typical",
+        "fov": "180_degrees"
+      },
+      {
+        "id": "rear_fisheye_camera",
+        "type": "wide_angle_fisheye_camera",
+        "interface": "MIPI_CSI2",
+        "autosar_interface": "Sensor_Interface_RawDataStream",
+        "function": "Captures rear 180-degree view for reversing guidance, rear obstacle detection and rear BEV sector",
+        "data_type": "raw_video_frames_fisheye",
+        "bandwidth": "high",
+        "resolution": "1920x1080_typical",
+        "fov": "180_degrees"
+      },
+      {
+        "id": "left_side_fisheye_camera",
+        "type": "wide_angle_fisheye_camera",
+        "interface": "MIPI_CSI2",
+        "autosar_interface": "Sensor_Interface_RawDataStream",
+        "function": "Captures left lateral 180-degree view for blind spot monitoring and left BEV sector",
+        "data_type": "raw_video_frames_fisheye",
+        "bandwidth": "high",
+        "resolution": "1920x1080_typical",
+        "fov": "180_degrees"
+      },
+      {
+        "id": "right_side_fisheye_camera",
+        "type": "wide_angle_fisheye_camera",
+        "interface": "MIPI_CSI2",
+        "autosar_interface": "Sensor_Interface_RawDataStream",
+        "function": "Captures right lateral 180-degree view for blind spot monitoring and right BEV sector",
+        "data_type": "raw_video_frames_fisheye",
+        "bandwidth": "high",
+        "resolution": "1920x1080_typical",
+        "fov": "180_degrees"
+      }
+    ],
+    "actuator_interfaces": [
+      "Ethernet to HMI ECU for BEV display output",
+      "CAN to Parking Assist ECU for proximity alerts and guidance"
+    ],
+    "communication_interfaces": [
+      "Ethernet (primary \u2014 high bandwidth camera data via SOME/IP, display output)",
+      "MIPI CSI-2 (raw fisheye camera streams, multi-channel deserializer)",
+      "CAN (vehicle network \u2014 speed, gear, indicator signals from BCM/VCU)",
+      "LIN (optional \u2014 camera heater control, camera module power)"
+    ],
+    "memory": {
+      "flash": "NVM for calibration lookup tables, homography matrices, stitching parameters, and OTA firmware",
+      "ram": "High-speed RAM for multi-camera frame buffers and real-time stitching pipeline",
+      "secure_storage": "HSM-protected key vault for cryptographic keys and secure boot credentials",
+      "persistent_storage": "ara::per managed storage for per-vehicle calibration data and camera-ground plane mapping"
+    }
+  },
+  "software": {
+    "platform": "AUTOSAR_Adaptive_Platform",
+    "os": "POSIX-compliant OS (e.g., QNX, Linux with RT patch)",
+    "ara_functional_clusters": [
+      {
+        "service": "ara::com",
+        "full_name": "Communication Management",
+        "role": "Service-oriented communication between SVS components and other ECUs",
+        "features": [
+          "SOME/IP service communication for camera stream routing",
+          "Service Discovery for dynamic HMI and parking ECU binding",
+          "Event-based camera frame publication",
+          "E2E protection for safety-relevant display data",
+          "MACsec support for Ethernet camera link security"
+        ],
+        "svs_use": [
+          "Publish BEV composite frame to HMI ECU via SOME/IP",
+          "Subscribe to gear and speed signals from VCU/BCM",
+          "Receive parking sensor proximity data from Parking Assist ECU"
+        ]
+      },
+      {
+        "service": "ara::exec",
+        "full_name": "Execution Management",
+        "role": "Manages SVS application lifecycle and camera pipeline state",
+        "features": [
+          "Process start/stop/restart",
+          "Execution dependencies management",
+          "Function group state control for active/standby camera modes"
+        ],
+        "svs_use": [
+          "Activate rear camera pipeline automatically when reverse gear is engaged",
+          "Activate full 360-degree mode when parking assist is triggered",
+          "Gracefully restart stitching pipeline on camera dropout without display freeze"
+        ]
+      },
+      {
+        "service": "ara::diag",
+        "full_name": "Diagnostic Management",
+        "role": "Health monitoring and fault reporting for camera system",
+        "features": [
+          "UDS and DoIP support",
+          "Diagnostic Trouble Codes (DTC) for camera faults",
+          "Authentication and access control for diagnostic sessions",
+          "Camera signal loss and image quality fault detection"
+        ],
+        "svs_use": [
+          "Report camera signal loss DTC to OBD",
+          "Detect image quality degradation (lens obstruction, fogging)",
+          "Provide authenticated diagnostic access for calibration write operations"
+        ]
+      },
+      {
+        "service": "ara::per",
+        "full_name": "Persistency",
+        "role": "Store SVS calibration and configuration data",
+        "features": [
+          "Key-value storage for calibration matrices",
+          "File storage for homography lookup tables",
+          "Encryption and redundancy for safety-critical calibration",
+          "Versioning and update handling"
+        ],
+        "svs_use": [
+          "Persist per-camera extrinsic and intrinsic calibration matrices",
+          "Store ground plane homography coefficients for BEV projection",
+          "Manage stitching seam configuration and overlap parameters"
+        ]
+      },
+      {
+        "service": "ara::crypto",
+        "full_name": "Cryptography",
+        "role": "Cryptographic operations for SVS security",
+        "features": [
+          "TLS 1.3 for secure Ethernet communication",
+          "Digital signature verification for OTA calibration and firmware updates",
+          "Key management via HSM"
+        ],
+        "svs_use": [
+          "Verify OTA firmware and calibration update package signatures",
+          "Secure Ethernet communication to HMI ECU",
+          "Authenticate diagnostic session for calibration write access"
+        ]
+      },
+      {
+        "service": "ara::idsm",
+        "full_name": "Intrusion Detection System Manager",
+        "role": "Runtime anomaly and security event monitoring",
+        "features": [
+          "Network traffic monitoring on camera Ethernet links",
+          "Application behavior monitoring",
+          "Security event reporting to vehicle SIEM"
+        ],
+        "svs_use": [
+          "Detect unexpected camera data injection on MIPI or Ethernet",
+          "Monitor unauthorized diagnostic session attempts",
+          "Report anomalous calibration write attempts"
+        ]
+      },
+      {
+        "service": "ara::ucm",
+        "full_name": "Update and Configuration Management",
+        "role": "OTA update handling for SVS firmware and calibration data",
+        "features": [
+          "Secure software update pipeline",
+          "Rollback support for failed updates",
+          "Calibration data update verification"
+        ],
+        "svs_use": [
+          "OTA updates for stitching algorithm improvements",
+          "Remote calibration matrix updates after windshield/camera replacement",
+          "Firmware updates via TCU"
+        ]
+      },
+      {
+        "service": "ara::core",
+        "full_name": "Core",
+        "role": "Base C++ APIs and data types for all SVS applications",
+        "features": [
+          "Error handling (Result, ErrorCode)",
+          "Thread safety for multi-camera parallel pipeline",
+          "Async handling (Future/Promise)",
+          "Logging and tracing"
+        ],
+        "svs_use": [
+          "Safe parallel processing of four simultaneous camera streams",
+          "Managing large frame buffer operations without data races"
+        ]
+      },
+      {
+        "service": "ara::tsync",
+        "full_name": "Time Synchronization",
+        "role": "Ensures synchronized timestamps across all cameras for seamless stitching",
+        "svs_use": [
+          "Synchronize all four fisheye camera capture timestamps via IEEE 802.1AS gPTP",
+          "Prevent image stitching artifacts caused by frame timing mismatch between cameras",
+          "Align camera frames with vehicle speed and steering data for dynamic overlay accuracy"
+        ]
+      },
+      {
+        "service": "ara::iam",
+        "full_name": "Identity and Access Management",
+        "role": "Controls access to SVS services and calibration resources",
+        "svs_use": [
+          "Restrict calibration write access to authorized OEM diagnostic sessions only",
+          "Control which ECUs can subscribe to raw camera frame streams",
+          "Enforce service-level access policies for display output services"
+        ]
+      }
+    ],
+    "application_layer": [
+      {
+        "module": "Camera_ISP_Pipeline",
+        "function": "Per-camera image signal processing \u2014 lens distortion correction (undistortion), noise reduction, white balance, HDR processing",
+        "ai_based": false,
+        "inputs": [
+          "raw_fisheye_frames_per_camera"
+        ],
+        "outputs": [
+          "undistorted_corrected_frames_per_camera"
+        ]
+      },
+      {
+        "module": "Homography_Projection_Engine",
+        "function": "Transforms each undistorted camera frame from perspective view to top-down ground plane view using precomputed homography matrices",
+        "ai_based": false,
+        "inputs": [
+          "undistorted_corrected_frames_per_camera",
+          "calibration_homography_matrices"
+        ],
+        "outputs": [
+          "top_down_projected_frames_per_camera"
+        ]
+      },
+      {
+        "module": "Image_Stitching_Module",
+        "function": "Blends and stitches four projected top-down frames into a single seamless 360-degree bird's-eye-view image with seam blending and overlap handling",
+        "ai_based": false,
+        "inputs": [
+          "top_down_projected_frames_per_camera"
+        ],
+        "outputs": [
+          "bev_composite_frame"
+        ]
+      },
+      {
+        "module": "Obstacle_Detection_Overlay",
+        "function": "Detects nearby obstacles from camera images or ultrasonic sensor data and overlays proximity indicators, colored warning zones, and distance markers on the BEV image",
+        "ai_based": true,
+        "inputs": [
+          "bev_composite_frame",
+          "ultrasonic_proximity_data"
+        ],
+        "outputs": [
+          "annotated_bev_frame"
+        ]
+      },
+      {
+        "module": "Dynamic_Trajectory_Overlay",
+        "function": "Computes and renders dynamic parking trajectory lines and steering-angle-dependent guide curves on the BEV display based on vehicle steering input",
+        "ai_based": false,
+        "inputs": [
+          "steering_angle",
+          "gear_position",
+          "vehicle_speed",
+          "annotated_bev_frame"
+        ],
+        "outputs": [
+          "final_display_frame"
+        ]
+      },
+      {
+        "module": "HMI_Display_Service",
+        "function": "Publishes final 360-degree BEV composite frame and camera-specific views to the HMI ECU for driver display via SOME/IP",
+        "ai_based": false,
+        "inputs": [
+          "final_display_frame"
+        ],
+        "outputs": [
+          "hmi_video_stream"
+        ]
+      },
+      {
+        "module": "Camera_Health_Monitor",
+        "function": "Monitors each camera stream for signal loss, image quality degradation, lens obstruction, and generates diagnostic fault codes",
+        "ai_based": false,
+        "inputs": [
+          "raw_fisheye_frames_per_camera"
+        ],
+        "outputs": [
+          "camera_health_status",
+          "dtc_faults"
+        ]
+      }
+    ]
+  },
+  "assets": [
+    {
+      "id": "camera_raw_frames",
+      "type": "sensor_data",
+      "description": "Raw fisheye video frames from front, rear, left, and right cameras captured over MIPI CSI-2",
+      "confidentiality": "medium",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Integrity and availability are safety-critical \u2014 corrupted or injected camera frames lead to wrong BEV display and missed obstacle detection",
+      "enisa_category": "Data Asset \u2014 Sensor raw data"
+    },
+    {
+      "id": "calibration_homography_matrices",
+      "type": "configuration_data",
+      "description": "Per-camera intrinsic (lens distortion) and extrinsic (ground plane homography) calibration matrices stored in ara::per",
+      "confidentiality": "medium",
+      "integrity": "critical",
+      "availability": "high",
+      "cybersecurity_property": "Tampered calibration matrices silently misalign the BEV image, causing systematic misrepresentation of obstacles \u2014 attacker can shift obstacle positions in the display view without visible corruption",
+      "enisa_category": "Data Asset \u2014 Configuration"
+    },
+    {
+      "id": "bev_composite_image",
+      "type": "processed_data",
+      "description": "Synthesized 360-degree bird's-eye-view image sent to HMI for driver display",
+      "confidentiality": "low",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Manipulated BEV output misleads the driver about vehicle surroundings during low-speed maneuvering \u2014 directly impacts parking safety",
+      "enisa_category": "Data Asset \u2014 Processed perception output"
+    },
+    {
+      "id": "svs_firmware",
+      "type": "firmware",
+      "description": "SVS ECU software including AUTOSAR AP stack, ISP pipeline, stitching engine, and overlay renderer",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Unauthorized firmware modification can disable safety overlays, inject malicious display content, or corrupt calibration logic",
+      "enisa_category": "Software Asset \u2014 ECU firmware"
+    },
+    {
+      "id": "stitching_seam_config",
+      "type": "configuration_data",
+      "description": "Image stitching seam positions, blending weights, and overlap region definitions for the four-camera BEV",
+      "confidentiality": "low",
+      "integrity": "high",
+      "availability": "medium",
+      "cybersecurity_property": "Modified seam config causes visible stitching artifacts or hidden blind spots in the 360-degree composite image",
+      "enisa_category": "Data Asset \u2014 Configuration"
+    },
+    {
+      "id": "vehicle_signals",
+      "type": "communication_data",
+      "description": "Gear position, vehicle speed, steering angle, and turn indicator signals received from VCU/BCM over CAN",
+      "confidentiality": "low",
+      "integrity": "high",
+      "availability": "high",
+      "cybersecurity_property": "Spoofed vehicle signals cause wrong camera activation logic and incorrect trajectory overlay \u2014 e.g., reverse camera not activated when reversing",
+      "enisa_category": "Communication Asset \u2014 Vehicle state data"
+    },
+    {
+      "id": "svs_ecu_hardware",
+      "type": "hardware",
+      "description": "SVS SoC including ISP, GPU, HSM, and multi-channel MIPI deserializer",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Physical compromise enables debug port attacks, calibration extraction, and firmware replacement",
+      "enisa_category": "Hardware Asset \u2014 ECU"
+    },
+    {
+      "id": "hmi_display_stream",
+      "type": "communication_data",
+      "description": "Final BEV video stream transmitted from SVS ECU to HMI display ECU over Ethernet/SOME/IP",
+      "confidentiality": "low",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Injected or replaced display stream misleads driver during maneuvering; display blackout removes safety-critical visual feedback",
+      "enisa_category": "Communication Asset \u2014 Display signal"
+    }
+  ],
+  "data_flows": [
+    {
+      "id": "DF1",
+      "source": "front_fisheye_camera",
+      "destination": "isp_pipeline",
+      "interface": "MIPI_CSI2",
+      "autosar_mechanism": "Sensor_Interface_RawDataStream",
+      "data": "raw_fisheye_frames",
+      "threats": [
+        "camera_signal_injection",
+        "physical_camera_blinding",
+        "frame_replay"
+      ],
+      "r155_reference": "T16.3"
+    },
+    {
+      "id": "DF2",
+      "source": "rear_fisheye_camera",
+      "destination": "isp_pipeline",
+      "interface": "MIPI_CSI2",
+      "autosar_mechanism": "Sensor_Interface_RawDataStream",
+      "data": "raw_fisheye_frames",
+      "threats": [
+        "camera_signal_injection",
+        "physical_camera_blinding",
+        "lens_obstruction"
+      ],
+      "r155_reference": "T16.3"
+    },
+    {
+      "id": "DF3",
+      "source": "left_side_fisheye_camera",
+      "destination": "isp_pipeline",
+      "interface": "MIPI_CSI2",
+      "autosar_mechanism": "Sensor_Interface_RawDataStream",
+      "data": "raw_fisheye_frames",
+      "threats": [
+        "camera_signal_injection",
+        "physical_camera_blinding"
+      ],
+      "r155_reference": "T16.3"
+    },
+    {
+      "id": "DF4",
+      "source": "right_side_fisheye_camera",
+      "destination": "isp_pipeline",
+      "interface": "MIPI_CSI2",
+      "autosar_mechanism": "Sensor_Interface_RawDataStream",
+      "data": "raw_fisheye_frames",
+      "threats": [
+        "camera_signal_injection",
+        "physical_camera_blinding"
+      ],
+      "r155_reference": "T16.3"
+    },
+    {
+      "id": "DF5",
+      "source": "isp_pipeline",
+      "destination": "homography_projection_engine",
+      "interface": "internal_IPC",
+      "autosar_mechanism": "ara::com internal method call",
+      "data": "undistorted_corrected_frames",
+      "threats": [
+        "tampering",
+        "privilege_escalation",
+        "memory_corruption"
+      ],
+      "r155_reference": "T5.2"
+    },
+    {
+      "id": "DF6",
+      "source": "homography_projection_engine",
+      "destination": "image_stitching_module",
+      "interface": "internal_IPC",
+      "autosar_mechanism": "ara::com internal event",
+      "data": "top_down_projected_frames",
+      "threats": [
+        "tampering",
+        "calibration_manipulation"
+      ],
+      "r155_reference": "T5.2"
+    },
+    {
+      "id": "DF7",
+      "source": "image_stitching_module",
+      "destination": "obstacle_detection_overlay",
+      "interface": "internal_IPC",
+      "autosar_mechanism": "ara::com event subscription",
+      "data": "bev_composite_frame",
+      "threats": [
+        "bev_frame_injection",
+        "adversarial_image_input",
+        "tampering"
+      ],
+      "r155_reference": "T5.2, T20.4"
+    },
+    {
+      "id": "DF8",
+      "source": "obstacle_detection_overlay",
+      "destination": "hmi_display_service",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::com SOME/IP + TLS",
+      "data": "annotated_bev_frame",
+      "threats": [
+        "display_stream_injection",
+        "MITM",
+        "replay",
+        "DoS"
+      ],
+      "r155_reference": "T5.1, T6.2"
+    },
+    {
+      "id": "DF9",
+      "source": "VCU_BCM",
+      "destination": "dynamic_trajectory_overlay",
+      "interface": "CAN",
+      "autosar_mechanism": "ara::com CAN binding",
+      "data": "gear_speed_steering_indicator_signals",
+      "threats": [
+        "CAN_spoofing",
+        "replay",
+        "signal_injection"
+      ],
+      "r155_reference": "T4.1, T6.2"
+    },
+    {
+      "id": "DF10",
+      "source": "TCU",
+      "destination": "svs_firmware_store",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::ucm over TLS",
+      "data": "ota_update_package",
+      "threats": [
+        "malicious_firmware",
+        "replay",
+        "tampering",
+        "OTA_compromise",
+        "calibration_replacement"
+      ],
+      "r155_reference": "T12.1"
+    },
+    {
+      "id": "DF11",
+      "source": "diagnostic_tester",
+      "destination": "svs_calibration_store",
+      "interface": "Ethernet_DoIP",
+      "autosar_mechanism": "ara::diag UDS over DoIP",
+      "data": "calibration_write_commands",
+      "threats": [
+        "unauthorized_calibration_write",
+        "diagnostic_session_hijack",
+        "replay"
+      ],
+      "r155_reference": "T9.1, T18.3"
+    }
+  ],
+  "attack_surfaces": [
+    {
+      "entry": "Front_Camera_MIPI_Interface",
+      "type": "physical_sensor",
+      "access": "physical_direct",
+      "description": "Attacker physically accesses the front camera MIPI CSI-2 link to inject fabricated video frames or replay pre-recorded footage, causing the SVS to display a false front view",
+      "attack_examples": [
+        "Replay of recorded clear-path footage hides front obstacle",
+        "Injected synthetic frame shows false free space ahead"
+      ],
+      "r155_reference": "T16.3"
+    },
+    {
+      "entry": "Rear_Camera_MIPI_Interface",
+      "type": "physical_sensor",
+      "access": "physical_direct",
+      "description": "Rear camera link is accessible from bumper area; attacker injects frames to disable rear obstacle display during reversing",
+      "attack_examples": [
+        "Injected blank frame disables rear view during reversing",
+        "Pre-recorded empty parking space replaces live rear view"
+      ],
+      "r155_reference": "T16.3"
+    },
+    {
+      "entry": "Physical_Camera_Obstruction",
+      "type": "physical_optical",
+      "access": "physical_proximity",
+      "description": "Camera lens physically blocked, painted, or covered causing loss of one or more BEV sectors \u2014 creates dangerous blind spots",
+      "attack_examples": [
+        "Rear camera lens spray-painted by vandal",
+        "Adhesive sticker placed on side camera lens"
+      ],
+      "r155_reference": "T16.3, T8.2"
+    },
+    {
+      "entry": "Calibration_via_Diagnostic_DoIP",
+      "type": "diagnostic",
+      "access": "network_or_physical",
+      "description": "UDS over DoIP allows reading and writing of calibration homography matrices; unauthorized write shifts all obstacle positions in BEV silently",
+      "attack_examples": [
+        "Attacker in extended diagnostic session writes modified homography matrix",
+        "Calibration replay from previous legitimate session accepted without freshness check"
+      ],
+      "r155_reference": "T9.1, T18.3"
+    },
+    {
+      "entry": "CAN_Vehicle_Signal_Bus",
+      "type": "network",
+      "access": "physical_OBD_or_internal",
+      "description": "CAN bus signals (gear, speed, steering) control camera activation and trajectory rendering; injected CAN frames cause wrong SVS behavior",
+      "attack_examples": [
+        "Injected CAN frame suppresses reverse gear signal \u2014 rear camera not activated",
+        "Spoofed steering angle causes trajectory lines to point wrong direction"
+      ],
+      "r155_reference": "T4.1, T6.2"
+    },
+    {
+      "entry": "Ethernet_HMI_Display_Link",
+      "type": "network",
+      "access": "physical_network_tap_or_internal",
+      "description": "Ethernet link between SVS ECU and HMI ECU carries final BEV video stream; attacker intercepts or replaces stream with manipulated content",
+      "attack_examples": [
+        "MITM replaces live BEV stream with pre-recorded safe parking view",
+        "DoS flood on Ethernet causes display blackout during parking maneuver"
+      ],
+      "r155_reference": "T5.1, T8.1"
+    },
+    {
+      "entry": "OTA_Update_Channel",
+      "type": "remote",
+      "access": "remote_via_TCU",
+      "description": "Malicious OTA package replaces SVS firmware, stitching engine, or calibration data \u2014 can persistently alter BEV output",
+      "attack_examples": [
+        "Backdoored stitching firmware introduces permanent blind spot",
+        "Malicious calibration OTA shifts obstacle display positions"
+      ],
+      "r155_reference": "T12.1"
+    },
+    {
+      "entry": "Debug_Ports_JTAG",
+      "type": "physical_hardware",
+      "access": "physical_direct",
+      "description": "Debug ports on SVS SoC allow direct memory read/write and key extraction if left active in production",
+      "attack_examples": [
+        "JTAG used to extract HSM cryptographic keys",
+        "Debug port used to inject modified calibration matrices into RAM"
+      ],
+      "r155_reference": "T28.2"
+    },
+    {
+      "entry": "Time_Synchronization_gPTP",
+      "type": "network",
+      "access": "physical_network_tap_or_internal",
+      "description": "Manipulation of gPTP time synchronization (IEEE 802.1AS) causes camera frame timestamp desynchronization leading to visible stitching artifacts or missed overlap alignment",
+      "attack_examples": [
+        "gPTP master spoofing causes 50ms offset between left and right camera frames",
+        "Stitching seams become misaligned at vehicle edges \u2014 obstacles at seam boundaries missed"
+      ],
+      "r155_reference": "T4.1, T8.1"
+    }
+  ],
+  "threat_catalog": [
+    {
+      "id": "SVS_T1",
+      "stride_category": "Spoofing",
+      "title": "Camera Frame Injection via MIPI CSI-2",
+      "description": "Attacker physically accesses a camera MIPI CSI-2 link and injects pre-recorded or synthetic video frames, causing the SVS to display a false view \u2014 hiding real obstacles or showing a clear path that does not exist",
+      "target_asset": "camera_raw_frames",
+      "attack_surface": "Front_Camera_MIPI_Interface",
+      "ai_attack_type": "Sensor_Data_Injection",
+      "impact": {
+        "safety": "Critical",
+        "financial": "High",
+        "operational": "Critical"
+      },
+      "likelihood": "Medium",
+      "r155_reference": "T16.3",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 Camera sensor attack",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "SVS_T2",
+      "stride_category": "Tampering",
+      "title": "Unauthorized Calibration Matrix Write via Diagnostic Session",
+      "description": "Attacker exploits an authenticated or unauthenticated UDS diagnostic session over DoIP to write modified homography calibration matrices, causing all obstacle positions in the BEV to be systematically shifted without any visible sign of corruption",
+      "target_asset": "calibration_homography_matrices",
+      "attack_surface": "Calibration_via_Diagnostic_DoIP",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "Critical",
+        "financial": "High",
+        "operational": "Critical"
+      },
+      "likelihood": "Medium",
+      "r155_reference": "T9.1, T18.3",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 Unauthorized diagnostic access",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "SVS_T3",
+      "stride_category": "Tampering",
+      "title": "Malicious OTA Firmware Replacing Stitching Engine",
+      "description": "Attacker delivers a malicious firmware package via OTA update channel (through TCU) replacing the image stitching engine with a version that introduces permanent blind spots, inverts obstacle distance indicators, or hides specific obstacle classes from the BEV output",
+      "target_asset": "svs_firmware",
+      "attack_surface": "OTA_Update_Channel",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "Critical",
+        "financial": "High",
+        "operational": "Critical"
+      },
+      "likelihood": "Low",
+      "r155_reference": "T12.1",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 OTA update attack",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "SVS_T4",
+      "stride_category": "Denial_of_Service",
+      "title": "Ethernet DoS Causing BEV Display Blackout",
+      "description": "Attacker floods the Ethernet link between SVS ECU and HMI ECU with high-rate traffic, causing the real-time BEV video stream to miss display deadlines \u2014 resulting in complete display blackout or frozen frame during parking maneuver",
+      "target_asset": "hmi_display_stream",
+      "attack_surface": "Ethernet_HMI_Display_Link",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "High",
+        "financial": "Medium",
+        "operational": "Critical"
+      },
+      "likelihood": "Medium",
+      "r155_reference": "T8.1",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 DoS on in-vehicle network",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "SVS_T5",
+      "stride_category": "Spoofing",
+      "title": "CAN Signal Spoofing to Suppress Reverse Camera Activation",
+      "description": "Attacker injects a spoofed CAN frame suppressing the reverse gear signal from BCM/VCU, causing SVS ECU to not activate the rear camera pipeline when the vehicle reverses \u2014 driver has no rear view during reversing",
+      "target_asset": "vehicle_signals",
+      "attack_surface": "CAN_Vehicle_Signal_Bus",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "Critical",
+        "financial": "Medium",
+        "operational": "Critical"
+      },
+      "likelihood": "Medium",
+      "r155_reference": "T4.1",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 CAN bus attack",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "SVS_T6",
+      "stride_category": "Spoofing",
+      "title": "gPTP Time Synchronization Spoofing Causing Stitching Desynchronization",
+      "description": "Attacker spoofs the gPTP (IEEE 802.1AS) grandmaster clock on the vehicle Ethernet network, introducing timestamp offsets between camera capture events \u2014 causing visible stitching artifacts and misaligned seams that create false blind spots at camera overlap boundaries",
+      "target_asset": "bev_composite_image",
+      "attack_surface": "Time_Synchronization_gPTP",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "High",
+        "financial": "Low",
+        "operational": "High"
+      },
+      "likelihood": "Low",
+      "r155_reference": "T4.1, T8.1",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 In-vehicle network attack",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "SVS_T7",
+      "stride_category": "Tampering",
+      "title": "Physical Camera Lens Obstruction Creating Blind Spot",
+      "description": "Attacker physically obstructs one or more fisheye camera lenses (paint, sticker, tape) permanently eliminating a BEV sector \u2014 creating a dangerous blind spot in the 360-degree view that is not immediately obvious to the driver",
+      "target_asset": "camera_raw_frames",
+      "attack_surface": "Physical_Camera_Obstruction",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "High",
+        "financial": "Medium",
+        "operational": "High"
+      },
+      "likelihood": "High",
+      "r155_reference": "T16.3",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 Physical sensor attack",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "SVS_T8",
+      "stride_category": "Tampering",
+      "title": "BEV Display Stream MITM Replacement",
+      "description": "Attacker performs a man-in-the-middle attack on the Ethernet link between SVS and HMI ECU, replacing the live BEV stream with a pre-recorded clean parking environment, causing the driver to receive a falsified safe view during a hazardous maneuver",
+      "target_asset": "hmi_display_stream",
+      "attack_surface": "Ethernet_HMI_Display_Link",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "Critical",
+        "financial": "High",
+        "operational": "Critical"
+      },
+      "likelihood": "Low",
+      "r155_reference": "T5.1",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 In-vehicle network MITM",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "SVS_T9",
+      "stride_category": "Information_Disclosure",
+      "title": "Calibration Data Extraction via Diagnostic Memory Read",
+      "description": "Attacker uses an authorized or compromised diagnostic session to read and exfiltrate per-vehicle camera calibration homography matrices, enabling reverse engineering of SVS geometry and preparation of precision attacks on specific vehicle models",
+      "target_asset": "calibration_homography_matrices",
+      "attack_surface": "Calibration_via_Diagnostic_DoIP",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "Low",
+        "financial": "Medium",
+        "operational": "Low"
+      },
+      "likelihood": "Medium",
+      "r155_reference": "T18.3",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 Data exfiltration",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "SVS_T10",
+      "stride_category": "Elevation_of_Privilege",
+      "title": "JTAG Debug Port Exploitation for Firmware Replacement",
+      "description": "Attacker with physical access to SVS ECU board exploits active JTAG debug port to gain full memory read/write access, extract HSM cryptographic keys, and flash modified firmware bypassing secure boot",
+      "target_asset": "svs_ecu_hardware",
+      "attack_surface": "Debug_Ports_JTAG",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "Critical",
+        "financial": "High",
+        "operational": "Critical"
+      },
+      "likelihood": "Low",
+      "r155_reference": "T28.2",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 Physical hardware attack",
+      "iso21434_clause": "clause-11"
+    }
+  ],
+  "security_controls": [
+    {
+      "id": "SC1",
+      "control": "Secure Boot",
+      "description": "AUTOSAR AP secure boot verifies cryptographic signature of SVS firmware at startup using keys stored in HSM \u2014 prevents execution of unauthorized firmware",
+      "mitigates": [
+        "SVS_T3",
+        "SVS_T10"
+      ],
+      "autosar_mechanism": "ara::crypto + HSM",
+      "r155_reference": "T12.1",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC2",
+      "control": "Diagnostic Session Authentication",
+      "description": "UDS Security Access (0x27) or Authentication (0x29) service enforces cryptographic challenge-response before allowing extended or programming session \u2014 prevents unauthorized calibration writes",
+      "mitigates": [
+        "SVS_T2",
+        "SVS_T9"
+      ],
+      "autosar_mechanism": "ara::diag UDS Authentication",
+      "r155_reference": "T9.1, T18.3",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC3",
+      "control": "Calibration Integrity Protection",
+      "description": "Calibration matrices stored in ara::per are protected with HMAC/digital signature \u2014 any modification is detected on next read, preventing silent calibration tampering",
+      "mitigates": [
+        "SVS_T2"
+      ],
+      "autosar_mechanism": "ara::per + ara::crypto",
+      "r155_reference": "T9.1",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC4",
+      "control": "TLS 1.3 on Ethernet Display Link",
+      "description": "BEV video stream from SVS ECU to HMI ECU is transported over TLS 1.3 encrypted Ethernet channel \u2014 prevents MITM replacement and replay of display stream",
+      "mitigates": [
+        "SVS_T4",
+        "SVS_T8"
+      ],
+      "autosar_mechanism": "ara::com SOME/IP + ara::crypto TLS 1.3",
+      "r155_reference": "T5.1",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC5",
+      "control": "CAN Message Authentication (AUTOSAR SecOC)",
+      "description": "AUTOSAR Secure Onboard Communication (SecOC) with MAC authentication on safety-critical CAN signals (gear, speed, steering) prevents spoofed signal injection",
+      "mitigates": [
+        "SVS_T5"
+      ],
+      "autosar_mechanism": "AUTOSAR CP SecOC",
+      "r155_reference": "T4.1",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC6",
+      "control": "OTA Package Signature Verification",
+      "description": "ara::ucm verifies digital signature of all OTA update packages before installation using OEM root of trust stored in HSM \u2014 prevents malicious firmware deployment",
+      "mitigates": [
+        "SVS_T3"
+      ],
+      "autosar_mechanism": "ara::ucm + ara::crypto",
+      "r155_reference": "T12.1",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC7",
+      "control": "Camera Signal Loss Detection and Warning",
+      "description": "Camera Health Monitor continuously checks each camera stream for signal loss, frozen frames, and image quality degradation \u2014 alerts driver via HMI and logs DTC on any camera fault",
+      "mitigates": [
+        "SVS_T7",
+        "SVS_T1"
+      ],
+      "autosar_mechanism": "ara::diag DTC + HMI warning",
+      "r155_reference": "T16.3",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC8",
+      "control": "JTAG and Debug Port Fusing in Production",
+      "description": "All JTAG and debug ports are hardware-fused (disabled) on production SVS ECU units \u2014 prevents physical debug port exploitation",
+      "mitigates": [
+        "SVS_T10"
+      ],
+      "autosar_mechanism": "Hardware Production Configuration",
+      "r155_reference": "T28.2",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC9",
+      "control": "gPTP Grandmaster Authentication",
+      "description": "IEEE 802.1AS-2020 supports secured time synchronization \u2014 authenticate gPTP grandmaster to prevent spoofed time source injection on vehicle Ethernet",
+      "mitigates": [
+        "SVS_T6"
+      ],
+      "autosar_mechanism": "ara::tsync + 802.1AS-2020",
+      "r155_reference": "T4.1",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC10",
+      "control": "IDSM Network Monitoring on Camera Ethernet",
+      "description": "ara::idsm monitors Ethernet traffic on camera links for anomalous traffic patterns, unexpected frame injection attempts, or unauthorized service subscriptions",
+      "mitigates": [
+        "SVS_T8",
+        "SVS_T4"
+      ],
+      "autosar_mechanism": "ara::idsm",
+      "r155_reference": "T8.1",
+      "iso21434_clause": "clause-10"
+    }
+  ],
+  "inter_ecu_relationships": [
+    {
+      "ecu": "HMI_ECU",
+      "relationship": "consumer",
+      "interface": "Ethernet SOME/IP",
+      "data_exchanged": "Final BEV composite video stream and camera-specific views",
+      "trust_level": "trusted_internal",
+      "security_mechanism": "TLS 1.3, service authentication"
+    },
+    {
+      "ecu": "Parking_Assist_ECU",
+      "relationship": "data_provider_and_consumer",
+      "interface": "Ethernet SOME/IP or CAN",
+      "data_exchanged": "Ultrasonic proximity sensor data (inbound), parking guidance triggers (inbound), obstacle overlay data (outbound)",
+      "trust_level": "trusted_internal",
+      "security_mechanism": "SOME/IP service authentication, SecOC on CAN"
+    },
+    {
+      "ecu": "VCU_BCM",
+      "relationship": "signal_provider",
+      "interface": "CAN",
+      "data_exchanged": "Gear position, vehicle speed, steering angle, turn indicator \u2014 used to trigger camera activation and trajectory overlay",
+      "trust_level": "trusted_internal",
+      "security_mechanism": "SecOC MAC authentication on CAN"
+    },
+    {
+      "ecu": "TCU",
+      "relationship": "update_channel",
+      "interface": "Ethernet",
+      "data_exchanged": "OTA firmware and calibration update packages",
+      "trust_level": "conditional",
+      "security_mechanism": "TLS 1.3, OTA package digital signature verification via ara::ucm"
+    },
+    {
+      "ecu": "Gateway_ECU",
+      "relationship": "network_gateway",
+      "interface": "Ethernet",
+      "data_exchanged": "Diagnostic messages routed from external tester via DoIP",
+      "trust_level": "conditional",
+      "security_mechanism": "DoIP session management, UDS authentication service"
+    }
+  ],
+  "iso21434_tara_context": {
+    "item_definition": {
+      "item": "Surround View System ECU",
+      "item_boundary": "Includes four fisheye cameras, ISP pipeline, BEV stitching engine, obstacle overlay renderer, calibration store, HMI display service, and diagnostic interface",
+      "operational_environment": "Low-speed urban maneuvering, parking facilities, residential areas; vehicle speeds typically below 30 km/h during SVS-active operation",
+      "relevant_standards": [
+        "ISO21434:2021",
+        "ISO26262:2018",
+        "UNECE_R155",
+        "ISO_17387:2008",
+        "SAE_J3016"
+      ]
+    },
+    "asset_identification_method": "ISO21434 clause-9 \u2014 Assets identified by cybersecurity properties (CIA triad) mapped to safety-critical functions per ISO-17387 surround monitoring requirements",
+    "threat_identification_method": "STRIDE per asset combined with ENISA automotive threat taxonomy and UNECE R155 threat list (Annex 5)",
+    "damage_scenario_examples": [
+      {
+        "scenario": "DS1",
+        "description": "Driver collides with pedestrian during parking due to rear camera blind spot created by lens obstruction or frame injection",
+        "impact_category": "Safety",
+        "severity": "Severe \u2014 potential life-threatening injury",
+        "related_threats": [
+          "SVS_T1",
+          "SVS_T7"
+        ]
+      },
+      {
+        "scenario": "DS2",
+        "description": "Driver reverses into obstacle because SVS shows pre-recorded clear path due to MITM display stream replacement",
+        "impact_category": "Safety",
+        "severity": "Major \u2014 vehicle damage and potential injury",
+        "related_threats": [
+          "SVS_T8"
+        ]
+      },
+      {
+        "scenario": "DS3",
+        "description": "Silent calibration tampering causes systematic misrepresentation of obstacle positions across entire vehicle fleet after malicious OTA",
+        "impact_category": "Safety and Financial",
+        "severity": "Critical \u2014 fleet-wide safety recall risk",
+        "related_threats": [
+          "SVS_T2",
+          "SVS_T3"
+        ]
+      },
+      {
+        "scenario": "DS4",
+        "description": "Reverse camera not activated during reversing due to CAN signal spoofing \u2014 driver lacks rear visibility in safety-critical maneuver",
+        "impact_category": "Safety",
+        "severity": "Major",
+        "related_threats": [
+          "SVS_T5"
+        ]
+      }
+    ],
+    "cybersecurity_goals": [
+      "CG1: The SVS shall display an authentic, unmanipulated 360-degree view at all times during active operation",
+      "CG2: Calibration data shall be protected from unauthorized modification throughout the vehicle lifetime",
+      "CG3: Camera activation shall correctly respond to authentic vehicle state signals",
+      "CG4: SVS firmware shall only be updated via authenticated and integrity-verified OTA packages",
+      "CG5: Diagnostic write access to calibration shall require valid cryptographic authentication"
+    ],
+    "iso17387_relevance": {
+      "standard": "ISO 17387:2008 \u2014 Lane Change Decision Aid Systems (LCDAS)",
+      "applicability": "ISO-17387 defines performance requirements for systems that inform the driver about vehicles in adjacent lanes and blind spot zones \u2014 directly governs the SVS blind-spot monitoring and lateral view display functions",
+      "key_requirements_mapped": [
+        "Detection zone coverage requirements for side cameras",
+        "False alarm rate limits for obstacle detection overlay",
+        "Driver warning modality requirements for blind spot alerts",
+        "System availability requirements during active driving"
+      ]
+    }
+  }
+}

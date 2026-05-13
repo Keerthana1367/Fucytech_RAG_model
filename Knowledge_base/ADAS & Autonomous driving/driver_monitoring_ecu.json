@@ -1,0 +1,878 @@
+{
+  "metadata": {
+    "ecu_id": "DMS_ECU",
+    "version": "1.0",
+    "category": "ADAS_and_Autonomous_Driving",
+    "standards_referenced": [
+      "AUTOSAR_AP_R25-11",
+      "ISO21434:2021",
+      "ISO26262:2018",
+      "UNECE_R155",
+      "UNECE_R157",
+      "SAE_J3016_202104",
+      "SAE_J3061",
+      "ENISA_AI_Autonomous_Driving_2021",
+      "ENISA_Smart_Cars_2019"
+    ],
+    "purpose": "RAG knowledge base for TARA pipeline — Driver Monitoring ECU domain knowledge",
+    "last_updated": "2025",
+    "notes": "Enriched with UNECE R157 ALKS requirements, AUTOSAR AP functional clusters, ENISA AI threat landscape"
+  },
+
+  "ecu_overview": {
+    "full_name": "Driver Monitoring System ECU",
+    "type": "human_machine_interface_and_safety_monitor",
+    "platform": "AUTOSAR_Adaptive_Platform",
+    "automation_level": {
+      "sae_j3016": "L2_to_L3",
+      "description": "DMS is mandatory at L3 per UNECE R157 ALKS — monitors driver availability and readiness to take over control",
+      "mandatory_at": ["L3_ALKS", "L3_Highway_Pilot"],
+      "advisory_at": ["L2_ACC", "L2_LKA"]
+    },
+    "asil": "B",
+    "functional_safety_standard": "ISO26262",
+    "cybersecurity_standard": "ISO21434",
+    "primary_function": "Monitors driver attentiveness, drowsiness, distraction, and hands-on-wheel status in real time. Issues transition demands when ADAS requests driver takeover and triggers Minimum Risk Maneuver (MRM) if driver is unresponsive.",
+    "core_pipeline": "Sensors → Driver State Detection → State Classification → Alert/Transition Demand → MRM if needed",
+    "operating_environment": "Real-time, safety-critical, continuous monitoring, integrated with ADAS and ALKS system",
+    "key_characteristics": [
+      "AI-based driver state detection using IR/NIR camera",
+      "Real-time gaze, head pose, blink rate tracking",
+      "Transition demand handling per UNECE R157",
+      "MRM trigger capability",
+      "Runs on AUTOSAR Adaptive Platform",
+      "Connected to ADAS ECU and VCU"
+    ],
+    "r157_requirements": {
+      "transition_demand_response_time": "4 seconds maximum",
+      "driver_reaction_model": {
+        "perception_time": "0.4 seconds",
+        "reaction_time": "0.75 seconds"
+      },
+      "warning_modalities": ["optical_signal", "acoustic_signal", "haptic_warning"],
+      "escalation_flow": "System detects risk → Alert → Wait → Escalate → MRM"
+    }
+  },
+
+  "hardware": {
+    "mcu": "Mid-range SoC with AI accelerator for real-time face/gaze tracking",
+    "processing_units": [
+      {
+        "unit": "CPU_cluster",
+        "role": "OS, application logic, alert management"
+      },
+      {
+        "unit": "NPU",
+        "role": "AI inference for driver state detection — gaze, head pose, blink"
+      },
+      {
+        "unit": "HSM",
+        "role": "Cryptographic key storage — supports ara::crypto"
+      }
+    ],
+    "sensors": [
+      {
+        "id": "ir_nir_camera",
+        "type": "infrared_near_infrared_camera",
+        "interface": "MIPI_CSI2",
+        "autosar_interface": "Sensor_Interface_RawDataStream",
+        "function": "Face detection, gaze tracking, eye blink monitoring, head pose estimation",
+        "data_type": "raw_ir_video_frames",
+        "bandwidth": "high",
+        "placement": "dashboard_or_steering_column"
+      },
+      {
+        "id": "steering_torque_sensor",
+        "type": "torque_sensor",
+        "interface": "CAN",
+        "autosar_interface": "ara::com",
+        "function": "Hands-on-wheel detection via steering torque measurement",
+        "data_type": "torque_value",
+        "bandwidth": "low"
+      },
+      {
+        "id": "seat_sensor",
+        "type": "pressure_sensor",
+        "interface": "LIN",
+        "autosar_interface": "ara::com",
+        "function": "Driver presence detection",
+        "data_type": "presence_boolean",
+        "bandwidth": "low"
+      },
+      {
+        "id": "eye_tracking_sensor",
+        "type": "optical_eye_tracker",
+        "interface": "MIPI_CSI2_or_Ethernet",
+        "autosar_interface": "Sensor_Interface_RawDataStream",
+        "function": "Precise eye gaze direction and blink rate tracking",
+        "data_type": "gaze_vector_blink_rate",
+        "bandwidth": "medium"
+      }
+    ],
+    "actuator_interfaces": [
+      "CAN to instrument cluster for optical warnings",
+      "CAN/LIN to speaker for acoustic warnings",
+      "CAN to steering for haptic feedback",
+      "Ethernet to ADAS ECU for driver state output",
+      "Ethernet to VCU for MRM trigger"
+    ],
+    "communication_interfaces": [
+      "MIPI CSI-2 (IR camera raw data)",
+      "Ethernet (primary — ADAS ECU communication, ara::com SOME/IP)",
+      "CAN (vehicle network — warnings, torque sensor)",
+      "LIN (seat sensor)"
+    ],
+    "memory": {
+      "flash": "NVM for driver state model and firmware",
+      "ram": "High-speed RAM for real-time AI inference",
+      "secure_storage": "HSM-protected key vault",
+      "persistent_storage": "ara::per for driver profiles and calibration"
+    }
+  },
+
+  "software": {
+    "platform": "AUTOSAR_Adaptive_Platform",
+    "os": "POSIX-compliant OS (e.g., QNX, Linux with RT patch)",
+    "ara_functional_clusters": [
+      {
+        "service": "ara::com",
+        "full_name": "Communication Management",
+        "role": "Communication between DMS and ADAS ECU, VCU, instrument cluster",
+        "features": [
+          "SOME/IP service communication",
+          "Event-based driver state updates",
+          "E2E protection for safety-critical state messages"
+        ],
+        "dms_use": [
+          "Send driver state to ADAS ECU",
+          "Receive transition demand from ADAS",
+          "Send MRM trigger to VCU"
+        ]
+      },
+      {
+        "service": "ara::exec",
+        "full_name": "Execution Management",
+        "role": "Manages DMS application lifecycle",
+        "features": [
+          "Process start/stop/restart",
+          "Error recovery handling"
+        ],
+        "dms_use": [
+          "Start driver monitoring when vehicle starts",
+          "Restart monitoring app on failure"
+        ]
+      },
+      {
+        "service": "ara::diag",
+        "full_name": "Diagnostic Management",
+        "role": "Health monitoring and fault reporting",
+        "features": [
+          "UDS and DoIP support",
+          "DTC reporting",
+          "Authentication and access control"
+        ],
+        "dms_use": [
+          "Camera failure detection and reporting",
+          "Sensor fault logging",
+          "DMS ECU health diagnostics"
+        ]
+      },
+      {
+        "service": "ara::per",
+        "full_name": "Persistency",
+        "role": "Store driver profiles and calibration data",
+        "features": [
+          "Key-value storage",
+          "Encryption and redundancy"
+        ],
+        "dms_use": [
+          "Store driver-specific calibration for gaze tracking",
+          "Persist driver state model parameters"
+        ]
+      },
+      {
+        "service": "ara::crypto",
+        "full_name": "Cryptography",
+        "role": "Cryptographic operations for security",
+        "features": ["TLS 1.3", "Digital signature verification", "Key management via HSM"],
+        "dms_use": [
+          "Secure communication with ADAS ECU",
+          "OTA update signature verification"
+        ]
+      },
+      {
+        "service": "ara::idsm",
+        "full_name": "Intrusion Detection System Manager",
+        "role": "Runtime anomaly detection",
+        "dms_use": [
+          "Detect abnormal driver state data patterns",
+          "Monitor for camera feed spoofing attempts"
+        ]
+      },
+      {
+        "service": "ara::ucm",
+        "full_name": "Update and Configuration Management",
+        "role": "OTA update handling for DMS firmware and AI models",
+        "dms_use": [
+          "Driver state AI model OTA updates",
+          "DMS firmware updates via TCU"
+        ]
+      },
+      {
+        "service": "ara::iam",
+        "full_name": "Identity and Access Management",
+        "role": "Controls access to DMS services and camera data",
+        "dms_use": [
+          "Restrict access to driver video stream",
+          "Control diagnostic session access"
+        ]
+      }
+    ],
+    "application_layer": [
+      {
+        "module": "Driver_State_Detection",
+        "function": "AI-based detection of driver attentiveness, drowsiness, distraction using IR camera",
+        "ai_based": true,
+        "inputs": ["ir_video_frames", "gaze_vector", "blink_rate", "head_pose"],
+        "outputs": ["driver_state_classification"]
+      },
+      {
+        "module": "Hands_On_Wheel_Detection",
+        "function": "Detects whether driver hands are on steering wheel via torque sensor",
+        "ai_based": false,
+        "inputs": ["steering_torque_value"],
+        "outputs": ["hands_on_wheel_boolean"]
+      },
+      {
+        "module": "Driver_State_Classifier",
+        "function": "Classifies driver state into: Attentive, Distracted, Drowsy, Unresponsive",
+        "ai_based": true,
+        "inputs": ["driver_state_detection_output", "hands_on_wheel_boolean", "seat_presence"],
+        "outputs": ["driver_state_enum"],
+        "states": ["Attentive", "Distracted", "Drowsy", "Unresponsive"]
+      },
+      {
+        "module": "Transition_Demand_Manager",
+        "function": "Manages transition demand from ADAS — issues warnings and escalates per R157",
+        "ai_based": false,
+        "inputs": ["driver_state_enum", "transition_demand_from_ADAS"],
+        "outputs": ["warning_command", "mrm_trigger"],
+        "timing": {
+          "max_response_time": "4 seconds",
+          "warning_escalation": "optical → acoustic → haptic → MRM"
+        }
+      },
+      {
+        "module": "MRM_Trigger",
+        "function": "Triggers Minimum Risk Maneuver if driver is unresponsive after transition demand",
+        "ai_based": false,
+        "inputs": ["driver_unresponsive_flag"],
+        "outputs": ["mrm_command_to_VCU"]
+      }
+    ],
+    "driver_state_machine": {
+      "states": ["Attentive", "Distracted", "Drowsy", "Unresponsive"],
+      "transitions": [
+        {"from": "Attentive", "to": "Distracted", "trigger": "gaze_off_road > threshold"},
+        {"from": "Distracted", "to": "Attentive", "trigger": "driver_responds"},
+        {"from": "Distracted", "to": "Drowsy", "trigger": "no_response + eye_closure"},
+        {"from": "Drowsy", "to": "Unresponsive", "trigger": "no_response > 4sec"},
+        {"from": "Unresponsive", "to": "MRM", "trigger": "MRM_trigger"}
+      ],
+      "action_mapping": [
+        {"state": "Attentive", "action": "Continue ADAS operation"},
+        {"state": "Distracted", "action": "Issue optical + acoustic warning"},
+        {"state": "Drowsy", "action": "Escalated warning — haptic"},
+        {"state": "Unresponsive", "action": "Trigger MRM via VCU"}
+      ]
+    },
+    "ai_lifecycle": {
+      "stages": [
+        "Driver face/gaze dataset collection",
+        "Data preprocessing — IR image normalization",
+        "Model training — driver state classifier",
+        "Adversarial robustness validation",
+        "Model deployment via OTA",
+        "Continuous model monitoring"
+      ],
+      "attack_surface_per_stage": {
+        "data_collection": "Privacy breach — driver video data",
+        "model_training": "Data poisoning — wrong driver state labels",
+        "model_deployment": "Malicious OTA model replacement",
+        "model_inference": "Camera spoofing — fake attentive driver feed"
+      }
+    },
+    "ota_update": {
+      "supported": true,
+      "mechanism": "ara::ucm over TLS via TCU",
+      "verification": "PKI signature check before apply",
+      "rollback": "Supported"
+    }
+  },
+
+  "assets": [
+    {
+      "id": "driver_video_stream",
+      "type": "sensor_data",
+      "description": "Raw IR/NIR camera frames of driver face and upper body",
+      "confidentiality": "critical",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Highly sensitive privacy asset — contains biometric data. Spoofed video can fool DMS into thinking driver is attentive when not.",
+      "enisa_category": "Data Asset — Biometric sensor data"
+    },
+    {
+      "id": "driver_state_model",
+      "type": "firmware_model",
+      "description": "Trained AI model for driver state classification — attentive, distracted, drowsy, unresponsive",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Tampered model can misclassify drowsy driver as attentive — directly causes safety failure",
+      "enisa_category": "Software Asset — AI/ML model"
+    },
+    {
+      "id": "driver_state_output",
+      "type": "processed_data",
+      "description": "Classified driver state sent to ADAS ECU",
+      "confidentiality": "medium",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Corrupted state output disables transition demand — driver takeover not requested",
+      "enisa_category": "Data Asset — Processed output"
+    },
+    {
+      "id": "transition_demand_signal",
+      "type": "actuator_signal",
+      "description": "Transition demand request from ADAS to DMS and warning commands to driver",
+      "confidentiality": "low",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Suppressed or injected transition demand can prevent or falsely trigger driver takeover",
+      "enisa_category": "Communication Asset — Control signal"
+    },
+    {
+      "id": "mrm_trigger_signal",
+      "type": "actuator_signal",
+      "description": "MRM trigger command sent to VCU to execute minimum risk maneuver",
+      "confidentiality": "low",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Injected MRM trigger causes sudden unintended vehicle stop. Suppressed MRM trigger prevents safety response.",
+      "enisa_category": "Communication Asset — Safety-critical signal"
+    },
+    {
+      "id": "driver_profile_data",
+      "type": "configuration",
+      "description": "Driver-specific calibration data for gaze tracking stored via ara::per",
+      "confidentiality": "high",
+      "integrity": "medium",
+      "availability": "medium",
+      "cybersecurity_property": "Privacy asset — contains driver biometric calibration. Tampered profile degrades detection accuracy.",
+      "enisa_category": "Data Asset — Personal data"
+    },
+    {
+      "id": "dms_firmware",
+      "type": "firmware",
+      "description": "DMS ECU software including OS, AUTOSAR AP middleware, and AI inference engine",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Unauthorized firmware modification disables driver monitoring entirely",
+      "enisa_category": "Software Asset — ECU firmware"
+    },
+    {
+      "id": "alert_logic",
+      "type": "software_module",
+      "description": "Warning escalation logic — optical, acoustic, haptic sequence per R157",
+      "confidentiality": "medium",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Tampered alert logic suppresses warnings — driver never notified of transition demand",
+      "enisa_category": "Software Asset — Safety logic"
+    }
+  ],
+
+  "data_flows": [
+    {
+      "id": "DF1",
+      "source": "ir_nir_camera",
+      "destination": "driver_state_detection_module",
+      "interface": "MIPI_CSI2",
+      "autosar_mechanism": "Sensor_Interface_RawDataStream",
+      "data": "raw_ir_video_frames",
+      "threats": ["camera_spoofing", "video_replay", "camera_blinding", "privacy_breach"],
+      "r155_reference": "T16.3 — Interference with sensors"
+    },
+    {
+      "id": "DF2",
+      "source": "steering_torque_sensor",
+      "destination": "hands_on_wheel_detection",
+      "interface": "CAN",
+      "autosar_mechanism": "ara::com",
+      "data": "torque_value",
+      "threats": ["CAN_message_spoofing", "tampering"],
+      "r155_reference": "T4.1 — Spoofing of messages"
+    },
+    {
+      "id": "DF3",
+      "source": "driver_state_classifier",
+      "destination": "ADAS_ECU",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::com SOME/IP event + E2E",
+      "data": "driver_state_classification",
+      "threats": ["tampering", "replay", "MITM"],
+      "r155_reference": "T5.2, T6.3"
+    },
+    {
+      "id": "DF4",
+      "source": "ADAS_ECU",
+      "destination": "transition_demand_manager",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::com SOME/IP",
+      "data": "transition_demand_request",
+      "threats": ["spoofing", "suppression", "injection"],
+      "r155_reference": "T5.1 — Code injection via communication channels"
+    },
+    {
+      "id": "DF5",
+      "source": "transition_demand_manager",
+      "destination": "instrument_cluster",
+      "interface": "CAN",
+      "autosar_mechanism": "ara::com",
+      "data": "warning_commands",
+      "threats": ["CAN_injection", "suppression_of_warnings"],
+      "r155_reference": "T11.1 — Malicious internal CAN messages"
+    },
+    {
+      "id": "DF6",
+      "source": "mrm_trigger_module",
+      "destination": "VCU",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::com SOME/IP + TLS",
+      "data": "mrm_trigger_command",
+      "threats": ["false_MRM_injection", "MRM_suppression", "replay"],
+      "r155_reference": "T5.1, T25.1 — Unauthorized access to vehicle key functions"
+    },
+    {
+      "id": "DF7",
+      "source": "TCU",
+      "destination": "dms_firmware_store",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::ucm over TLS",
+      "data": "ota_update_package",
+      "threats": ["malicious_firmware", "model_replacement", "replay"],
+      "r155_reference": "T12.1 — Compromise of OTA update procedures"
+    }
+  ],
+
+  "attack_surfaces": [
+    {
+      "entry": "IR_Camera_interface",
+      "type": "physical_sensor",
+      "access": "physical_or_optical",
+      "description": "Attacker replays or spoofs a video of attentive driver to fool DMS AI model into thinking driver is alert",
+      "attack_examples": [
+        "Replay recorded attentive driver video to camera feed",
+        "Place printed face photo in front of camera",
+        "IR laser blinds camera"
+      ],
+      "r155_reference": "T16.3"
+    },
+    {
+      "entry": "CAN_network",
+      "type": "network",
+      "access": "physical_or_internal",
+      "description": "Attacker injects or suppresses CAN messages to fake driver state or suppress warnings",
+      "attack_examples": [
+        "Inject fake torque sensor reading — false hands-on-wheel",
+        "Suppress warning CAN message — driver not alerted"
+      ],
+      "r155_reference": "T11.1, T5.1"
+    },
+    {
+      "entry": "Ethernet_network",
+      "type": "network",
+      "access": "physical_network_tap_or_internal",
+      "description": "Attacker intercepts or manipulates driver state messages between DMS and ADAS ECU",
+      "attack_examples": [
+        "MITM replaces drowsy state with attentive state",
+        "Inject false MRM trigger causing sudden vehicle stop"
+      ],
+      "r155_reference": "T5.1, T6.2"
+    },
+    {
+      "entry": "OTA_update_channel",
+      "type": "remote",
+      "access": "remote_via_TCU",
+      "description": "Malicious OTA replaces driver state AI model with backdoored version that always outputs attentive",
+      "attack_examples": [
+        "Backdoored model always classifies driver as attentive",
+        "Downgrade to vulnerable DMS firmware"
+      ],
+      "r155_reference": "T12.1"
+    },
+    {
+      "entry": "Diagnostic_interface_DoIP",
+      "type": "diagnostic",
+      "access": "network_or_physical",
+      "description": "Attacker uses UDS over DoIP to disable DMS monitoring or extract driver video data",
+      "attack_examples": [
+        "Write diagnostic command to disable DMS",
+        "Read driver video buffer via memory dump"
+      ],
+      "r155_reference": "T9.1, T18.3"
+    },
+    {
+      "entry": "Driver_profile_storage",
+      "type": "data_storage",
+      "access": "physical_or_diagnostic",
+      "description": "Attacker accesses stored driver profile data containing biometric calibration",
+      "attack_examples": [
+        "Extract driver biometric data via ara::per storage",
+        "Tamper calibration to degrade gaze tracking"
+      ],
+      "r155_reference": "T19.2 — Unauthorized access to privacy information"
+    }
+  ],
+
+  "threat_catalog": [
+    {
+      "id": "DMS_T1",
+      "stride_category": "Spoofing",
+      "title": "Camera Feed Spoofing — Fake Attentive Driver",
+      "description": "Attacker replays a recorded video of attentive driver or places a printed face photo in front of IR camera to fool DMS AI model into classifying drowsy/absent driver as attentive",
+      "target_asset": "driver_video_stream",
+      "attack_surface": "IR_Camera_interface",
+      "ai_attack_type": "Model_Evasion",
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Medium",
+      "r155_reference": "T16.3",
+      "enisa_reference": "ENISA_AI_Autonomous_2021 — Adversarial ML on perception",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "DMS_T2",
+      "stride_category": "Spoofing",
+      "title": "CAN Message Spoofing — False Hands-on-Wheel",
+      "description": "Attacker injects fake steering torque CAN messages to make DMS believe driver hands are on wheel when they are not",
+      "target_asset": "transition_demand_signal",
+      "attack_surface": "CAN_network",
+      "ai_attack_type": null,
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Medium",
+      "r155_reference": "T4.1, T11.1",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "DMS_T3",
+      "stride_category": "Tampering",
+      "title": "Driver State Message Tampering — MITM",
+      "description": "Attacker performs MITM on Ethernet between DMS and ADAS ECU, replacing drowsy driver state with attentive state, preventing transition demand",
+      "target_asset": "driver_state_output",
+      "attack_surface": "Ethernet_network",
+      "ai_attack_type": null,
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T5.2, T6.2",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "DMS_T4",
+      "stride_category": "Tampering",
+      "title": "AI Model Backdoor — Always Attentive Output",
+      "description": "Attacker delivers malicious OTA update replacing driver state model with backdoored version that always outputs attentive regardless of actual driver state",
+      "target_asset": "driver_state_model",
+      "attack_surface": "OTA_update_channel",
+      "ai_attack_type": "Model_Poisoning_Backdoor",
+      "impact": { "safety": "Critical", "financial": "Critical", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T12.1",
+      "enisa_reference": "ENISA_AI_Autonomous_2021 — Model manipulation",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "DMS_T5",
+      "stride_category": "Tampering",
+      "title": "Warning Suppression — Alert Logic Tampering",
+      "description": "Attacker tampers with alert logic via diagnostic interface or OTA to suppress optical, acoustic, or haptic warnings — driver never receives transition demand",
+      "target_asset": "alert_logic",
+      "attack_surface": "Diagnostic_interface_DoIP",
+      "ai_attack_type": null,
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T20.5, T25.1",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "DMS_T6",
+      "stride_category": "Tampering",
+      "title": "False MRM Injection",
+      "description": "Attacker injects false MRM trigger command to VCU causing sudden unintended vehicle stop in traffic",
+      "target_asset": "mrm_trigger_signal",
+      "attack_surface": "Ethernet_network",
+      "ai_attack_type": null,
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T5.1, T25.1",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "DMS_T7",
+      "stride_category": "Denial_of_Service",
+      "title": "Camera Blinding — IR Sensor Saturation",
+      "description": "Attacker uses IR light source to saturate the DMS IR camera, blinding driver monitoring and disabling state detection",
+      "target_asset": "driver_video_stream",
+      "attack_surface": "IR_Camera_interface",
+      "ai_attack_type": "Sensor_Blinding",
+      "impact": { "safety": "Critical", "financial": "Medium", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T8.2, T16.3",
+      "enisa_reference": "ENISA_AI_Autonomous_2021 — Sensor blinding",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "DMS_T8",
+      "stride_category": "Denial_of_Service",
+      "title": "DMS ECU DoS — Monitoring Disabled",
+      "description": "Attacker floods DMS ECU or its Ethernet interface causing processing overload and disabling real-time driver monitoring",
+      "target_asset": "dms_firmware",
+      "attack_surface": "Ethernet_network",
+      "ai_attack_type": null,
+      "impact": { "safety": "Critical", "financial": "Medium", "operational": "Critical" },
+      "likelihood": "Medium",
+      "r155_reference": "T8.1",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "DMS_T9",
+      "stride_category": "Replay",
+      "title": "Driver Video Replay Attack",
+      "description": "Attacker records previous session video of attentive driver and replays it into camera feed to bypass monitoring",
+      "target_asset": "driver_video_stream",
+      "attack_surface": "IR_Camera_interface",
+      "ai_attack_type": "Replay_Attack",
+      "impact": { "safety": "Critical", "financial": "Medium", "operational": "Critical" },
+      "likelihood": "Medium",
+      "r155_reference": "T6.3",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "DMS_T10",
+      "stride_category": "Information_Disclosure",
+      "title": "Driver Video Stream Privacy Breach",
+      "description": "Attacker intercepts or extracts driver IR video stream containing biometric face data — major privacy violation",
+      "target_asset": "driver_video_stream",
+      "attack_surface": "Diagnostic_interface_DoIP",
+      "ai_attack_type": null,
+      "impact": { "safety": "Low", "financial": "High", "operational": "Low", "privacy": "Critical" },
+      "likelihood": "Medium",
+      "r155_reference": "T7.1, T19.2",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "DMS_T11",
+      "stride_category": "Information_Disclosure",
+      "title": "Driver Profile Data Extraction",
+      "description": "Attacker extracts stored driver biometric calibration data from ara::per storage via diagnostic or physical access",
+      "target_asset": "driver_profile_data",
+      "attack_surface": "Driver_profile_storage",
+      "ai_attack_type": null,
+      "impact": { "safety": "Low", "financial": "Medium", "operational": "Low", "privacy": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T19.2 — Unauthorized access to privacy information",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "DMS_T12",
+      "stride_category": "Privilege_Escalation",
+      "title": "Diagnostic Session Exploit — DMS Disable",
+      "description": "Attacker uses UDS over DoIP to unlock extended diagnostic session and disable driver monitoring function or extract driver video data",
+      "target_asset": "dms_firmware",
+      "attack_surface": "Diagnostic_interface_DoIP",
+      "ai_attack_type": null,
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Medium",
+      "r155_reference": "T9.1, T18.3",
+      "iso21434_clause": "clause-11"
+    }
+  ],
+
+  "security_controls": [
+    {
+      "type": "ara::crypto + TLS_1.3",
+      "mechanism": "TLS_1.3",
+      "protects": "Ethernet communication between DMS and ADAS ECU",
+      "standard_ref": "AUTOSAR_AP_R25"
+    },
+    {
+      "type": "SecOC",
+      "mechanism": "CMAC_authentication",
+      "protects": "CAN messages — torque sensor, warning commands",
+      "standard_ref": "AUTOSAR_AP_R25"
+    },
+    {
+      "type": "E2E_protection",
+      "mechanism": "CRC_and_counter",
+      "protects": "Driver state output integrity on ara::com events",
+      "standard_ref": "AUTOSAR_AP_R25"
+    },
+    {
+      "type": "HSM",
+      "mechanism": "key_storage_and_secure_boot",
+      "protects": "DMS firmware integrity and cryptographic keys",
+      "standard_ref": "AUTOSAR_AP_R25 + ISO21434"
+    },
+    {
+      "type": "OTA_signature_verification",
+      "mechanism": "PKI_digital_signature",
+      "protects": "Driver state AI model and firmware OTA updates",
+      "standard_ref": "UNECE_R155_Annex5_M16"
+    },
+    {
+      "type": "ara::idsm",
+      "mechanism": "anomaly_detection",
+      "protects": "Runtime monitoring for camera spoofing and message injection",
+      "standard_ref": "AUTOSAR_AP_R25 + UNECE_R155"
+    },
+    {
+      "type": "ara::iam",
+      "mechanism": "role_based_access_control",
+      "protects": "Driver video stream and diagnostic interface access",
+      "standard_ref": "AUTOSAR_AP_R25 + UNECE_R155_M18"
+    },
+    {
+      "type": "Video_liveness_detection",
+      "mechanism": "AI_liveness_check",
+      "protects": "DMS AI model from video replay and photo spoofing attacks",
+      "standard_ref": "ENISA_AI_Autonomous_2021"
+    },
+    {
+      "type": "Privacy_protection",
+      "mechanism": "encryption_of_driver_video_at_rest_and_in_transit",
+      "protects": "Driver biometric video data from unauthorized access",
+      "standard_ref": "GDPR + UNECE_R155_T19.2"
+    }
+  ],
+
+  "inter_ecu_relationships": [
+    {
+      "from": "IR_Camera", "to": "DMS_ECU",
+      "protocol": "MIPI_CSI2",
+      "autosar_mechanism": "Sensor_Interface_RawDataStream",
+      "data": "raw_ir_video_frames",
+      "security": "physical_access_control"
+    },
+    {
+      "from": "DMS_ECU", "to": "ADAS_ECU",
+      "protocol": "Ethernet",
+      "autosar_mechanism": "ara::com SOME/IP + E2E",
+      "data": "driver_state_classification",
+      "security": "TLS_1.3 + E2E"
+    },
+    {
+      "from": "ADAS_ECU", "to": "DMS_ECU",
+      "protocol": "Ethernet",
+      "autosar_mechanism": "ara::com SOME/IP",
+      "data": "transition_demand_request",
+      "security": "TLS_1.3"
+    },
+    {
+      "from": "DMS_ECU", "to": "VCU",
+      "protocol": "Ethernet",
+      "autosar_mechanism": "ara::com SOME/IP",
+      "data": "mrm_trigger_command",
+      "security": "TLS_1.3 + E2E"
+    },
+    {
+      "from": "DMS_ECU", "to": "Instrument_Cluster",
+      "protocol": "CAN",
+      "autosar_mechanism": "ara::com",
+      "data": "warning_commands",
+      "security": "SecOC_CMAC"
+    },
+    {
+      "from": "Steering_Torque_Sensor", "to": "DMS_ECU",
+      "protocol": "CAN",
+      "autosar_mechanism": "ara::com",
+      "data": "torque_value",
+      "security": "SecOC_CMAC"
+    },
+    {
+      "from": "TCU", "to": "DMS_ECU",
+      "protocol": "Ethernet",
+      "autosar_mechanism": "ara::ucm",
+      "data": "ota_update_package",
+      "security": "TLS + PKI signature"
+    }
+  ],
+
+  "iso21434_tara_context": {
+    "item_definition": "Driver Monitoring System ECU responsible for real-time monitoring of driver attentiveness and managing transition demands at SAE L2-L3 per UNECE R157",
+    "item_boundary": "Includes IR camera, steering torque sensor, seat sensor, AI driver state classifier, transition demand manager, MRM trigger, and interfaces to ADAS ECU and VCU",
+    "cybersecurity_goals": [
+      "Driver video stream integrity and confidentiality shall be protected to prevent spoofing and privacy breach",
+      "Driver state classification shall be accurate and tamper-proof to ensure correct transition demand",
+      "Transition demand signal shall be authenticated to prevent suppression or false injection",
+      "MRM trigger shall be authenticated and protected from false injection or suppression",
+      "DMS firmware and AI model shall be verified before OTA update application",
+      "Diagnostic access to driver video data shall be restricted to authorized sessions"
+    ],
+    "damage_scenarios": [
+      {
+        "id": "DS1",
+        "description": "Drowsy driver not detected due to camera spoofing — ADAS continues without transition demand — collision occurs",
+        "impact_category": "Safety",
+        "severity": "Critical",
+        "linked_threats": ["DMS_T1", "DMS_T9"]
+      },
+      {
+        "id": "DS2",
+        "description": "Driver state message tampered — ADAS not notified of drowsy driver — no takeover requested",
+        "impact_category": "Safety",
+        "severity": "Critical",
+        "linked_threats": ["DMS_T3", "DMS_T4"]
+      },
+      {
+        "id": "DS3",
+        "description": "False MRM injection causes sudden vehicle stop in high-speed traffic",
+        "impact_category": "Safety + Financial",
+        "severity": "Critical",
+        "linked_threats": ["DMS_T6"]
+      },
+      {
+        "id": "DS4",
+        "description": "Driver biometric video data extracted — major privacy violation",
+        "impact_category": "Privacy + Financial",
+        "severity": "Critical",
+        "linked_threats": ["DMS_T10", "DMS_T11"]
+      },
+      {
+        "id": "DS5",
+        "description": "DMS disabled via DoS or diagnostic exploit — driver monitoring completely non-functional",
+        "impact_category": "Safety",
+        "severity": "Critical",
+        "linked_threats": ["DMS_T8", "DMS_T12"]
+      }
+    ],
+    "r157_specific_requirements": [
+      "DMS shall detect driver unavailability within 4 second transition demand window",
+      "DMS shall issue optical, acoustic, and haptic warnings in escalation sequence",
+      "DMS shall trigger MRM if driver is unresponsive after full warning sequence",
+      "DMS shall model driver reaction time of 0.75 seconds for safety calculations"
+    ],
+    "sae_j3061_lifecycle_phases": [
+      "Concept phase — DMS cybersecurity goals defined per R157",
+      "Development — privacy by design for driver video data",
+      "Validation — camera spoofing tests, replay attack tests",
+      "Operation — continuous monitoring via ara::idsm",
+      "Incident response — OTA patch via ara::ucm"
+    ],
+    "relevant_clauses": [
+      "clause-9 — Item definition and cybersecurity goals",
+      "clause-10 — Cybersecurity requirements",
+      "clause-11 — TARA",
+      "clause-15 — Threat analysis methods"
+    ]
+  }
+}

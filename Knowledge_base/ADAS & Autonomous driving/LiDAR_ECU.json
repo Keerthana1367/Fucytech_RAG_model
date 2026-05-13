@@ -1,0 +1,1196 @@
+{
+  "metadata": {
+    "ecu_id": "LIDAR_1",
+    "version": "1.0",
+    "category": "LiDAR_Sensor_ECU",
+    "standards_referenced": [
+      "AUTOSAR_AP_R25-11",
+      "AUTOSAR_AP_SWS_NetworkManagement_R25-11",
+      "ISO21434:2021",
+      "ISO26262:2018",
+      "UNECE_R155",
+      "IEC_60825-1:2014",
+      "SAE_J3016_202104",
+      "SAE_J3061_2021",
+      "ENISA_AI_Cybersecurity_Autonomous_Driving_2021",
+      "ENISA_JRC_Cybersecurity_Challenges",
+      "Good_Practices_Security_Smart_Cars",
+      "WP2016_Good_Practices_Smart_Cars",
+      "GRVA_11_33e_Automated_Driving",
+      "8021AS_2020_TimeSync"
+    ],
+    "purpose": "RAG knowledge base for TARA pipeline \u2014 LiDAR Sensor ECU domain knowledge",
+    "last_updated": "2026",
+    "notes": "Enriched with IEC 60825-1 laser safety classification (Class 1 eye-safe, AE/AEL pulse model), AUTOSAR AP NM UdpNM state machine, ara::com Ethernet point cloud streaming, ENISA adversarial ML threat landscape for LiDAR, R155 T16.3 and T8.2 sensor threat references. LiDAR operates as standalone sensor ECU publishing 3D point clouds to ADAS/Fusion ECU over Automotive Ethernet."
+  },
+  "ecu_overview": {
+    "full_name": "LiDAR Sensor ECU",
+    "type": "sensor_perception",
+    "platform": "AUTOSAR_Adaptive_Platform",
+    "automation_level": {
+      "sae_j3016": "L2_to_L4",
+      "description": "LiDAR ECU serves as primary 3D environment sensing subsystem for partial to high automation \u2014 provides high-resolution point cloud data for object detection, free-space mapping, and localization in L2 through L4 systems",
+      "l2_l3_role": "Obstacle detection, object classification support, lane boundary mapping",
+      "l4_role": "High-definition 3D mapping, precise localization, simultaneous object tracking"
+    },
+    "asil": "B",
+    "functional_safety_standard": "ISO26262",
+    "cybersecurity_standard": "ISO21434",
+    "laser_safety_standard": "IEC_60825-1:2014",
+    "laser_class": "Class_1_eye_safe",
+    "primary_function": "Emits pulsed laser beams across a 360-degree or sector field of view, measures time-of-flight of reflected pulses to compute distance, and generates a 3D point cloud of the vehicle surroundings at high frame rates. Publishes point cloud data to ADAS/Fusion ECU over Automotive Ethernet using ara::com SOME/IP. Must comply with IEC 60825-1 Class 1 laser safety classification \u2014 Accessible Emission (AE) must remain below Accessible Emission Limit (AEL) under all operating and fault conditions.",
+    "core_pipeline": "Laser Emission (pulsed) -> ToF Measurement -> Point Cloud Generation -> Filtering & Segmentation -> ara::com SOME/IP Publication -> ADAS Fusion ECU",
+    "operating_environment": "All-weather, day/night, highway and urban environments; operates continuously during vehicle motion; real-time hard deadlines for point cloud publication",
+    "key_characteristics": [
+      "Pulsed laser emission \u2014 Class 1 eye-safe per IEC 60825-1 under all operating conditions",
+      "Accessible Emission (AE) continuously controlled to stay below AEL limits",
+      "Scanning or solid-state multi-beam architecture \u2014 treated as extended/distributed source per IEC 60825-1",
+      "3D point cloud output over Automotive Ethernet at 10\u201320 Hz frame rate",
+      "High bandwidth Ethernet interface \u2014 primary communication via ara::com SOME/IP",
+      "Network Management via AUTOSAR AP UdpNM \u2014 coordinated sleep/wake with ADAS ECU",
+      "6-DOF extrinsic calibration stored in ara::per (rotation + translation relative to vehicle frame)",
+      "Tight timestamp synchronization with cameras and radar via IEEE 802.1AS gPTP",
+      "POSIX-based OS (QNX or Linux RT) running AUTOSAR AP stack"
+    ]
+  },
+  "hardware": {
+    "mcu": "Embedded SoC with DSP/FPGA accelerator for real-time ToF computation and point cloud processing, plus HSM for cryptographic operations",
+    "processing_units": [
+      {
+        "unit": "CPU_cluster",
+        "role": "AUTOSAR AP OS execution, ara:: service orchestration, NM state machine, application logic"
+      },
+      {
+        "unit": "DSP_FPGA_Accelerator",
+        "role": "Real-time Time-of-Flight (ToF) distance computation from raw pulse return signals \u2014 processes millions of returns per second"
+      },
+      {
+        "unit": "Laser_Driver_Circuit",
+        "role": "Controls pulsed laser emission \u2014 enforces AE within AEL limits per IEC 60825-1; governs pulse duration, repetition rate, and grouping"
+      },
+      {
+        "unit": "HSM",
+        "role": "Cryptographic operations and key storage \u2014 supports ara::crypto for secure boot, TLS, and OTA verification"
+      }
+    ],
+    "sensors": [
+      {
+        "id": "lidar_laser_emitter",
+        "type": "pulsed_laser_array",
+        "interface": "internal_laser_driver",
+        "autosar_interface": "internal_hardware_abstraction",
+        "function": "Emits pulsed laser beams \u2014 Class 1 eye-safe per IEC 60825-1. Pulse parameters (duration, repetition, grouping) are controlled to maintain AE below AEL under normal, maintenance, and fault conditions",
+        "laser_wavelength": "905nm_or_1550nm_typical",
+        "laser_class": "Class_1_IEC60825-1",
+        "pulse_type": "pulsed_ToF",
+        "iec60825_compliance": "AE must not exceed AEL at any measurement aperture and distance under all operating and fault conditions including diffuser failure",
+        "bandwidth": "internal"
+      },
+      {
+        "id": "lidar_photodetector_array",
+        "type": "avalanche_photodiode_or_SPAD_array",
+        "interface": "internal_DSP",
+        "autosar_interface": "internal_hardware_abstraction",
+        "function": "Detects reflected laser pulses and measures return time \u2014 raw ToF data fed to DSP for distance computation",
+        "data_type": "raw_pulse_return_signals",
+        "bandwidth": "very_high"
+      },
+      {
+        "id": "scanning_mechanism",
+        "type": "rotating_mirror_or_solid_state_MEMS",
+        "interface": "internal_motor_driver",
+        "autosar_interface": "internal_hardware_abstraction",
+        "function": "Steers laser beam across field of view \u2014 rotating (mechanical) or solid-state (MEMS/OPA). IEC 60825-1 extended source analysis applies to scanning multi-beam arrays",
+        "fov": "360_degrees_horizontal_rotating_or_120_degrees_solid_state",
+        "scan_rate": "10_to_20_Hz"
+      }
+    ],
+    "actuator_interfaces": [
+      "Ethernet to ADAS/Fusion ECU for point cloud data publication"
+    ],
+    "communication_interfaces": [
+      "Ethernet (primary \u2014 1GbE or 10GbE for high-bandwidth point cloud streaming via SOME/IP)",
+      "Ethernet (AUTOSAR AP UdpNM \u2014 network management coordination with ADAS and Fusion ECUs)",
+      "CAN (optional secondary \u2014 low-bandwidth status, health, and diagnostic triggers from BCM/GW)",
+      "IEEE 802.1AS gPTP (time synchronization for point cloud timestamp alignment with cameras and radar)"
+    ],
+    "memory": {
+      "flash": "NVM for LiDAR firmware, DSP algorithms, and OTA updates",
+      "ram": "High-speed RAM for point cloud frame buffers and real-time ToF computation",
+      "secure_storage": "HSM-protected key vault for secure boot credentials and TLS keys",
+      "persistent_storage": "ara::per managed storage for 6-DOF extrinsic calibration matrices and operational configuration"
+    },
+    "iec60825_safety_mechanisms": {
+      "protective_housing": "Sealed housing prevents access to beam path during operation \u2014 IEC 60825-1 protective enclosure requirement",
+      "beam_stop_attenuator": "Hardware beam attenuator that activates on fault conditions \u2014 prevents AE exceeding AEL on housing breach",
+      "emission_interlock": "Hardware interlock disables laser emission when protective housing is opened",
+      "power_limiting_circuit": "Dedicated circuit enforces maximum laser power output \u2014 prevents excessive emission under any fault",
+      "fault_condition_compliance": "System must remain Class 1 compliant even on diffuser failure or mechanical fault per IEC 60825-1 evaluation requirements"
+    }
+  },
+  "software": {
+    "platform": "AUTOSAR_Adaptive_Platform",
+    "os": "POSIX-compliant OS (e.g., QNX, Linux with RT patch)",
+    "ara_functional_clusters": [
+      {
+        "service": "ara::com",
+        "full_name": "Communication Management",
+        "role": "High-bandwidth point cloud publication and service-oriented communication with ADAS/Fusion ECU",
+        "features": [
+          "SOME/IP service communication for 3D point cloud event publishing",
+          "Service Discovery for dynamic ADAS/Fusion ECU subscription",
+          "Event-based point cloud frame publication at 10-20 Hz",
+          "E2E protection on point cloud data for safety-critical integrity",
+          "MACsec support for Ethernet point cloud link security"
+        ],
+        "lidar_use": [
+          "Publish 3D point cloud frames to ADAS Fusion ECU at every scan cycle",
+          "Publish LiDAR health status and fault notifications",
+          "Subscribe to calibration update commands from diagnostic/OTA services"
+        ]
+      },
+      {
+        "service": "ara::nm",
+        "full_name": "Network Management \u2014 UdpNM",
+        "role": "Coordinated network sleep and wake management for LiDAR Ethernet network cluster",
+        "features": [
+          "Decentralized UdpNM algorithm \u2014 each node operates independently",
+          "Three operational modes: Network Mode (FULL_COM), Prepare Bus-Sleep, Bus-Sleep",
+          "Network Mode substates: Repeat Message State, Normal Operation State, Ready Sleep State",
+          "NM message structure: Source Node ID + Control Bit Vector (CBV) + User Data",
+          "Periodic multicast NM messages keep network active \u2014 absence triggers sleep transition",
+          "NM timers: NM-Timeout Timer, Repeat Message Timer, Wait Bus-Sleep Timer",
+          "Partial Network Cluster (PNC) support \u2014 activates only required network segments",
+          "External wake-up via NM message reception triggers FULL_COM transition",
+          "Security events and violation messages reported per NM spec section 7.10"
+        ],
+        "lidar_use": [
+          "LiDAR ECU participates in Ethernet NM cluster with ADAS ECU and Fusion ECU",
+          "LiDAR requests FULL_COM when sensor is active and publishing point clouds",
+          "LiDAR transitions to Bus-Sleep when vehicle is parked and sensing is not required",
+          "NM state machine ensures LiDAR Ethernet link is coordinated with downstream consumers",
+          "PNC support allows LiDAR to sleep while other Ethernet services remain active"
+        ],
+        "nm_security_note": "NM messages over UDP/Ethernet are unauthenticated in base UdpNM spec \u2014 spoofed NM messages can force LiDAR into Bus-Sleep (DoS) or prevent sleep coordination (battery drain). Requires additional MACsec or application-layer authentication."
+      },
+      {
+        "service": "ara::exec",
+        "full_name": "Execution Management",
+        "role": "Manages LiDAR application and pipeline lifecycle",
+        "features": [
+          "Process start/stop/restart",
+          "Execution dependency management",
+          "Function group state control for active/standby sensing modes"
+        ],
+        "lidar_use": [
+          "Start point cloud processing pipeline when vehicle ignition is on",
+          "Gracefully restart processing pipeline on DSP fault without laser emission interruption",
+          "Transition to low-power standby mode when LiDAR sensing not required"
+        ]
+      },
+      {
+        "service": "ara::diag",
+        "full_name": "Diagnostic Management",
+        "role": "Health monitoring, fault reporting, and calibration access control",
+        "features": [
+          "UDS and DoIP support",
+          "DTC for LiDAR-specific faults (misalignment, contamination, emitter failure)",
+          "Authentication and access control for calibration write sessions",
+          "Diagnostic conversations for extrinsic calibration read/write"
+        ],
+        "lidar_use": [
+          "Report LiDAR misalignment DTC when point cloud consistency check fails",
+          "Report laser emitter fault DTC when AE monitoring detects emission anomaly",
+          "Provide authenticated diagnostic session for 6-DOF calibration write after vehicle service",
+          "Report contamination/blockage fault (lens dirt, snow, ice)"
+        ]
+      },
+      {
+        "service": "ara::per",
+        "full_name": "Persistency",
+        "role": "Store LiDAR calibration and operational configuration",
+        "features": [
+          "Key-value storage for 6-DOF extrinsic calibration parameters",
+          "File storage for point cloud filtering configuration",
+          "Encryption and redundancy for safety-critical calibration data",
+          "Versioning and update handling"
+        ],
+        "lidar_use": [
+          "Persist 6-DOF extrinsic calibration (rotation matrix + translation vector relative to vehicle frame)",
+          "Store point cloud filtering thresholds and segmentation parameters",
+          "Manage laser emission configuration and safety limits"
+        ]
+      },
+      {
+        "service": "ara::crypto",
+        "full_name": "Cryptography",
+        "role": "Cryptographic operations for LiDAR security",
+        "features": [
+          "TLS 1.3 for secure Ethernet point cloud communication",
+          "Digital signature verification for OTA firmware updates",
+          "Key management via HSM",
+          "HMAC for calibration data integrity"
+        ],
+        "lidar_use": [
+          "Secure Ethernet communication to ADAS/Fusion ECU",
+          "Verify OTA firmware package signatures before installation",
+          "Authenticate diagnostic session for calibration write access",
+          "HMAC protection of stored extrinsic calibration matrices"
+        ]
+      },
+      {
+        "service": "ara::idsm",
+        "full_name": "Intrusion Detection System Manager",
+        "role": "Runtime anomaly and security event monitoring",
+        "features": [
+          "Ethernet traffic monitoring on LiDAR network link",
+          "NM message anomaly detection",
+          "Unauthorized service subscription detection",
+          "Security event reporting to vehicle SIEM"
+        ],
+        "lidar_use": [
+          "Detect unexpected point cloud subscription from unauthorized ECUs",
+          "Monitor for NM message spoofing attempts on LiDAR Ethernet cluster",
+          "Report anomalous diagnostic session attempts targeting calibration store"
+        ]
+      },
+      {
+        "service": "ara::ucm",
+        "full_name": "Update and Configuration Management",
+        "role": "OTA update handling for LiDAR firmware and calibration",
+        "features": [
+          "Secure software update pipeline",
+          "Rollback support for failed updates",
+          "Calibration data update verification"
+        ],
+        "lidar_use": [
+          "OTA updates for DSP point cloud processing algorithms",
+          "Remote calibration updates after vehicle service or alignment change",
+          "Firmware updates for laser driver and safety control circuits via TCU"
+        ]
+      },
+      {
+        "service": "ara::core",
+        "full_name": "Core",
+        "role": "Base C++ APIs for all LiDAR processing applications",
+        "features": [
+          "Error handling (Result, ErrorCode)",
+          "Thread safety for parallel point cloud pipeline",
+          "Async handling (Future/Promise)",
+          "Logging and tracing"
+        ],
+        "lidar_use": [
+          "Safe async handling of high-rate point cloud frame buffers",
+          "Error propagation from DSP to diagnostic module on processing fault"
+        ]
+      },
+      {
+        "service": "ara::tsync",
+        "full_name": "Time Synchronization",
+        "role": "Synchronized timestamps for multi-sensor fusion accuracy",
+        "svs_use": [
+          "Synchronize LiDAR point cloud frame timestamps with camera and radar via IEEE 802.1AS gPTP",
+          "Ensure ToF measurement timestamps are aligned to vehicle time domain for accurate sensor fusion",
+          "Prevent fusion artifacts caused by timestamp skew between LiDAR and camera frames"
+        ]
+      },
+      {
+        "service": "ara::iam",
+        "full_name": "Identity and Access Management",
+        "role": "Controls access to LiDAR services and calibration resources",
+        "lidar_use": [
+          "Restrict 6-DOF calibration write access to OEM-authorized diagnostic sessions only",
+          "Control which ECUs may subscribe to raw point cloud stream",
+          "Enforce service access policies for laser emission configuration interfaces"
+        ]
+      }
+    ],
+    "application_layer": [
+      {
+        "module": "Laser_Emission_Controller",
+        "function": "Controls pulsed laser emission \u2014 enforces IEC 60825-1 Class 1 compliance by monitoring AE against AEL. Manages pulse duration, repetition rate, and grouping. Activates beam attenuator on AE violation or housing fault.",
+        "ai_based": false,
+        "inputs": [
+          "laser_driver_feedback",
+          "housing_interlock_status",
+          "fault_signals"
+        ],
+        "outputs": [
+          "laser_pulse_commands",
+          "beam_attenuator_control",
+          "emission_fault_flag"
+        ]
+      },
+      {
+        "module": "ToF_Processing_Engine",
+        "function": "Processes raw pulse return signals from photodetector array using DSP/FPGA \u2014 computes per-return distance from time-of-flight measurements, applies multi-pulse grouping logic per IEC 60825-1 pulse analysis model",
+        "ai_based": false,
+        "inputs": [
+          "raw_pulse_return_signals"
+        ],
+        "outputs": [
+          "raw_point_cloud_with_timestamps"
+        ]
+      },
+      {
+        "module": "Point_Cloud_Filtering_Module",
+        "function": "Filters raw point cloud \u2014 removes outliers, rain/fog returns, ground plane points. Applies statistical and radius filtering to produce clean environment point cloud.",
+        "ai_based": false,
+        "inputs": [
+          "raw_point_cloud_with_timestamps"
+        ],
+        "outputs": [
+          "filtered_point_cloud"
+        ]
+      },
+      {
+        "module": "Point_Cloud_Segmentation_Module",
+        "function": "Segments filtered point cloud into clusters corresponding to distinct objects in the environment \u2014 provides preliminary object candidates for downstream ADAS fusion",
+        "ai_based": true,
+        "inputs": [
+          "filtered_point_cloud"
+        ],
+        "outputs": [
+          "segmented_point_cloud_with_object_candidates"
+        ]
+      },
+      {
+        "module": "Extrinsic_Calibration_Manager",
+        "function": "Applies 6-DOF extrinsic calibration transformation (rotation + translation) to align point cloud to vehicle coordinate frame. Loads calibration from ara::per on startup.",
+        "ai_based": false,
+        "inputs": [
+          "segmented_point_cloud_with_object_candidates",
+          "extrinsic_calibration_6dof"
+        ],
+        "outputs": [
+          "vehicle_frame_point_cloud"
+        ]
+      },
+      {
+        "module": "Point_Cloud_Publisher",
+        "function": "Publishes calibrated 3D point cloud to ADAS/Fusion ECU via ara::com SOME/IP event at configured frame rate",
+        "ai_based": false,
+        "inputs": [
+          "vehicle_frame_point_cloud"
+        ],
+        "outputs": [
+          "some_ip_point_cloud_stream"
+        ]
+      },
+      {
+        "module": "LiDAR_Health_Monitor",
+        "function": "Monitors laser emitter health, photodetector signal quality, scanning mechanism status, lens contamination, and AE compliance. Generates DTCs and health status reports.",
+        "ai_based": false,
+        "inputs": [
+          "laser_driver_feedback",
+          "photodetector_snr",
+          "scan_encoder_status",
+          "lens_contamination_sensor"
+        ],
+        "outputs": [
+          "lidar_health_status",
+          "dtc_faults",
+          "ara_diag_reports"
+        ]
+      },
+      {
+        "module": "NM_State_Controller",
+        "function": "Implements AUTOSAR AP UdpNM state machine for LiDAR Ethernet cluster \u2014 manages transitions between FULL_COM, Prepare Bus-Sleep, and Bus-Sleep modes based on sensing requirements and NM message exchange",
+        "ai_based": false,
+        "inputs": [
+          "nm_messages_received",
+          "internal_network_request",
+          "vehicle_ignition_status"
+        ],
+        "outputs": [
+          "nm_messages_transmitted",
+          "network_state",
+          "sleep_wake_commands"
+        ]
+      }
+    ]
+  },
+  "assets": [
+    {
+      "id": "lidar_point_cloud",
+      "type": "sensor_data",
+      "description": "3D point cloud generated from pulsed laser ToF measurements \u2014 primary output of LiDAR ECU published to ADAS/Fusion ECU over Ethernet",
+      "confidentiality": "low",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Integrity and availability are safety-critical \u2014 injected, removed, or manipulated points directly corrupt the 3D environment model used for object detection and path planning in ADAS",
+      "enisa_category": "Data Asset \u2014 Sensor raw data"
+    },
+    {
+      "id": "extrinsic_calibration_6dof",
+      "type": "configuration_data",
+      "description": "6-DOF extrinsic calibration parameters (3x3 rotation matrix + 3D translation vector) defining LiDAR pose relative to vehicle coordinate frame \u2014 stored in ara::per",
+      "confidentiality": "medium",
+      "integrity": "critical",
+      "availability": "high",
+      "cybersecurity_property": "Tampered 6-DOF calibration silently rotates or translates the entire point cloud in 3D space \u2014 all detected objects are systematically displaced in the vehicle frame without visible corruption. Attacker can cause ADAS to miss obstacles or react to phantom objects in wrong positions.",
+      "enisa_category": "Data Asset \u2014 Configuration"
+    },
+    {
+      "id": "laser_emission_config",
+      "type": "configuration_data",
+      "description": "Laser driver configuration \u2014 pulse parameters (duration, repetition rate, power level, grouping) that govern IEC 60825-1 AE/AEL compliance",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "high",
+      "cybersecurity_property": "Unauthorized modification of laser emission parameters can cause AE to exceed AEL \u2014 violates IEC 60825-1 Class 1 safety classification and creates eye hazard. Can also degrade detection range or saturate photodetector.",
+      "enisa_category": "Configuration Asset \u2014 Safety-critical emission control"
+    },
+    {
+      "id": "lidar_firmware",
+      "type": "firmware",
+      "description": "LiDAR ECU software including AUTOSAR AP stack, DSP ToF algorithms, point cloud processing pipeline, and laser safety control logic",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Unauthorized firmware modification can disable laser safety interlocks, corrupt point cloud output, introduce backdoors, or bypass IEC 60825-1 emission controls",
+      "enisa_category": "Software Asset \u2014 ECU firmware"
+    },
+    {
+      "id": "nm_network_state",
+      "type": "communication_data",
+      "description": "AUTOSAR AP UdpNM network state \u2014 controls whether LiDAR Ethernet cluster is in FULL_COM (active) or Bus-Sleep (inactive)",
+      "confidentiality": "low",
+      "integrity": "high",
+      "availability": "critical",
+      "cybersecurity_property": "Spoofed NM messages can force LiDAR into Bus-Sleep mode (denial of sensing), prevent coordinated shutdown (battery drain), or trigger unwanted wake-up cycles. NM messages are unauthenticated in base UdpNM spec.",
+      "enisa_category": "Communication Asset \u2014 Network control"
+    },
+    {
+      "id": "lidar_ecu_hardware",
+      "type": "hardware",
+      "description": "LiDAR SoC including DSP/FPGA, HSM, laser driver circuit, and IEC 60825-1 safety mechanisms (beam attenuator, emission interlock)",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Physical compromise enables debug port attacks, safety circuit bypass (disabling laser interlocks), calibration extraction, and firmware replacement. Bypassing laser safety circuits creates IEC 60825-1 Class 1 compliance violation.",
+      "enisa_category": "Hardware Asset \u2014 ECU"
+    },
+    {
+      "id": "tof_raw_pulse_data",
+      "type": "sensor_data",
+      "description": "Raw pulse return signals from photodetector array before DSP processing",
+      "confidentiality": "low",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Injected false pulse returns at the photodetector input level create phantom 3D objects or remove real obstacles at the earliest stage of the pipeline \u2014 hardest to detect as manipulation",
+      "enisa_category": "Data Asset \u2014 Raw sensor signal"
+    },
+    {
+      "id": "gPTP_timestamp",
+      "type": "communication_data",
+      "description": "IEEE 802.1AS gPTP time synchronization used to timestamp LiDAR point cloud frames for multi-sensor fusion",
+      "confidentiality": "low",
+      "integrity": "high",
+      "availability": "high",
+      "cybersecurity_property": "Spoofed gPTP grandmaster introduces timestamp offset on point cloud frames \u2014 desynchronizes LiDAR from cameras/radar in fusion pipeline causing misregistration of objects across sensors",
+      "enisa_category": "Communication Asset \u2014 Time synchronization"
+    }
+  ],
+  "data_flows": [
+    {
+      "id": "DF1",
+      "source": "laser_emitter_array",
+      "destination": "environment_reflection",
+      "interface": "optical_laser_emission",
+      "autosar_mechanism": "hardware_laser_driver_control",
+      "data": "pulsed_laser_beams",
+      "threats": [
+        "laser_blinding_high_power",
+        "iec60825_class1_violation",
+        "emission_config_tampering"
+      ],
+      "r155_reference": "T16.3",
+      "iec60825_note": "AE must remain below AEL \u2014 controlled by Laser_Emission_Controller hardware circuit"
+    },
+    {
+      "id": "DF2",
+      "source": "environment_reflection",
+      "destination": "photodetector_array",
+      "interface": "optical_return_signal",
+      "autosar_mechanism": "hardware_photodetector",
+      "data": "reflected_laser_pulses",
+      "threats": [
+        "laser_pulse_injection_optical",
+        "lidar_blinding_saturation",
+        "replay_optical"
+      ],
+      "r155_reference": "T16.3, T8.2"
+    },
+    {
+      "id": "DF3",
+      "source": "photodetector_array",
+      "destination": "tof_processing_engine",
+      "interface": "internal_DSP_bus",
+      "autosar_mechanism": "hardware_abstraction_layer",
+      "data": "raw_pulse_return_signals",
+      "threats": [
+        "tampering_raw_signal",
+        "hardware_fault_injection"
+      ],
+      "r155_reference": "T5.2"
+    },
+    {
+      "id": "DF4",
+      "source": "tof_processing_engine",
+      "destination": "point_cloud_filtering_module",
+      "interface": "internal_IPC",
+      "autosar_mechanism": "ara::com internal method call",
+      "data": "raw_point_cloud_with_timestamps",
+      "threats": [
+        "tampering",
+        "memory_corruption",
+        "privilege_escalation"
+      ],
+      "r155_reference": "T5.2"
+    },
+    {
+      "id": "DF5",
+      "source": "point_cloud_filtering_module",
+      "destination": "point_cloud_segmentation_module",
+      "interface": "internal_IPC",
+      "autosar_mechanism": "ara::com internal event",
+      "data": "filtered_point_cloud",
+      "threats": [
+        "adversarial_point_cloud_input",
+        "tampering"
+      ],
+      "r155_reference": "T5.2, T20.4"
+    },
+    {
+      "id": "DF6",
+      "source": "extrinsic_calibration_manager",
+      "destination": "point_cloud_publisher",
+      "interface": "internal_IPC",
+      "autosar_mechanism": "ara::per read + ara::com event",
+      "data": "vehicle_frame_point_cloud",
+      "threats": [
+        "calibration_tampering",
+        "coordinate_frame_poisoning"
+      ],
+      "r155_reference": "T9.1"
+    },
+    {
+      "id": "DF7",
+      "source": "point_cloud_publisher",
+      "destination": "adas_fusion_ecu",
+      "interface": "Ethernet_1GbE_10GbE",
+      "autosar_mechanism": "ara::com SOME/IP event + TLS",
+      "data": "vehicle_frame_point_cloud_stream",
+      "threats": [
+        "point_cloud_injection_ethernet",
+        "MITM",
+        "replay",
+        "DoS_ethernet_flood"
+      ],
+      "r155_reference": "T5.1, T6.2, T8.1"
+    },
+    {
+      "id": "DF8",
+      "source": "tcu",
+      "destination": "lidar_firmware_store",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::ucm over TLS",
+      "data": "ota_firmware_update_package",
+      "threats": [
+        "malicious_firmware",
+        "replay",
+        "tampering",
+        "OTA_compromise",
+        "laser_safety_bypass_via_firmware"
+      ],
+      "r155_reference": "T12.1"
+    },
+    {
+      "id": "DF9",
+      "source": "diagnostic_tester",
+      "destination": "lidar_calibration_store",
+      "interface": "Ethernet_DoIP",
+      "autosar_mechanism": "ara::diag UDS over DoIP",
+      "data": "calibration_6dof_write_commands",
+      "threats": [
+        "unauthorized_calibration_write",
+        "diagnostic_session_hijack",
+        "replay_calibration"
+      ],
+      "r155_reference": "T9.1, T18.3"
+    },
+    {
+      "id": "DF10",
+      "source": "lidar_nm_controller",
+      "destination": "adas_ecu_nm_cluster",
+      "interface": "Ethernet_UDP",
+      "autosar_mechanism": "ara::nm UdpNM multicast",
+      "data": "nm_messages_cbv_node_id",
+      "threats": [
+        "nm_message_spoofing",
+        "nm_dos_sleep_forcing",
+        "nm_replay"
+      ],
+      "r155_reference": "T4.1, T8.1",
+      "nm_note": "UdpNM messages carry Source Node ID + CBV \u2014 unauthenticated in base spec, vulnerable to spoofing"
+    },
+    {
+      "id": "DF11",
+      "source": "gPTP_grandmaster",
+      "destination": "lidar_tsync",
+      "interface": "Ethernet_802.1AS",
+      "autosar_mechanism": "ara::tsync",
+      "data": "time_sync_messages",
+      "threats": [
+        "gPTP_grandmaster_spoofing",
+        "timestamp_manipulation"
+      ],
+      "r155_reference": "T4.1"
+    }
+  ],
+  "attack_surfaces": [
+    {
+      "entry": "Optical_Laser_Return_Channel",
+      "type": "physical_optical",
+      "access": "physical_proximity_external",
+      "description": "Attacker uses an external pulsed laser source synchronized to LiDAR emission to inject false return pulses into the photodetector \u2014 creates phantom 3D objects or removes real objects from point cloud. Covered under ENISA AI Cybersecurity 2021 LiDAR spoofing.",
+      "attack_examples": [
+        "Pulsed laser injected from roadside creates phantom vehicle in LiDAR point cloud",
+        "Spoofed returns remove pedestrian cluster from 3D environment model"
+      ],
+      "r155_reference": "T16.3",
+      "iec60825_relevance": "Attacker laser source itself may violate IEC 60825-1 \u2014 irrelevant to victim ECU compliance but relevant to physical attack characterization"
+    },
+    {
+      "entry": "LiDAR_Lens_Blinding",
+      "type": "physical_optical",
+      "access": "physical_proximity_external",
+      "description": "High-power laser or strong light source saturates photodetector array causing total or partial blindness \u2014 point cloud returns null or degraded in affected sector. IEC 60825-1 does not protect against external illumination of the receiver.",
+      "attack_examples": [
+        "High-power IR laser saturates photodetector \u2014 entire forward sector returns no valid points",
+        "Bright spotlight causes partial sector blindness \u2014 obstacle in that sector not detected"
+      ],
+      "r155_reference": "T16.3, T8.2"
+    },
+    {
+      "entry": "Ethernet_Point_Cloud_Link",
+      "type": "network",
+      "access": "physical_network_tap_or_internal",
+      "description": "Attacker on vehicle Ethernet network intercepts, modifies, replays, or injects point cloud data between LiDAR ECU and ADAS/Fusion ECU",
+      "attack_examples": [
+        "MITM replaces live point cloud with pre-recorded empty-road scan during approach to obstacle",
+        "Ethernet flood causes ADAS fusion ECU to miss LiDAR frame deadlines"
+      ],
+      "r155_reference": "T5.1, T8.1"
+    },
+    {
+      "entry": "UdpNM_Network_Management_Channel",
+      "type": "network",
+      "access": "physical_network_tap_or_internal",
+      "description": "AUTOSAR AP UdpNM messages are unauthenticated in base spec \u2014 attacker on Ethernet can send spoofed NM messages to force LiDAR ECU into Bus-Sleep, blocking point cloud publication",
+      "attack_examples": [
+        "Spoofed NM message with CBV set forces LiDAR into Ready Sleep State \u2014 sensor goes offline",
+        "Continuous NM traffic prevents LiDAR from transitioning to sleep \u2014 battery drain attack"
+      ],
+      "r155_reference": "T4.1, T8.1",
+      "nm_spec_note": "AUTOSAR AP NM spec section 7.10 includes security event reporting but base UdpNM provides no authentication \u2014 identified as architectural gap"
+    },
+    {
+      "entry": "Calibration_via_Diagnostic_DoIP",
+      "type": "diagnostic",
+      "access": "network_or_physical",
+      "description": "UDS over DoIP allows read/write of 6-DOF extrinsic calibration \u2014 unauthorized write silently displaces entire point cloud in vehicle coordinate frame",
+      "attack_examples": [
+        "Attacker in extended diagnostic session writes modified rotation matrix \u2014 all objects shifted 30cm in lateral direction",
+        "Calibration replay from previous session accepted without freshness check"
+      ],
+      "r155_reference": "T9.1, T18.3"
+    },
+    {
+      "entry": "OTA_Update_Channel",
+      "type": "remote",
+      "access": "remote_via_TCU",
+      "description": "Malicious OTA package replaces LiDAR firmware \u2014 can disable laser safety interlocks (IEC 60825-1 violation), corrupt point cloud pipeline, or introduce persistent backdoor",
+      "attack_examples": [
+        "Backdoored firmware disables AE monitoring circuit \u2014 laser operates above AEL (Class 1 violation)",
+        "Modified DSP algorithm introduces systematic point removal for specific obstacle shapes"
+      ],
+      "r155_reference": "T12.1"
+    },
+    {
+      "entry": "Physical_Laser_Safety_Bypass",
+      "type": "physical_hardware",
+      "access": "physical_direct",
+      "description": "Physical access to LiDAR hardware allows bypassing IEC 60825-1 safety mechanisms \u2014 removing beam attenuator, disabling housing interlock, or overriding power limiting circuit to operate above Class 1 AEL",
+      "attack_examples": [
+        "Beam attenuator physically removed \u2014 laser operates at full power above AEL",
+        "Housing interlock bypassed \u2014 laser active when casing opened for maintenance"
+      ],
+      "r155_reference": "T28.2",
+      "iec60825_note": "Physical bypass of safety mechanisms is a regulatory violation (IEC 60825-1) in addition to a cybersecurity threat"
+    },
+    {
+      "entry": "gPTP_Time_Synchronization",
+      "type": "network",
+      "access": "physical_network_tap_or_internal",
+      "description": "gPTP grandmaster spoofing introduces timestamp offset on LiDAR point cloud frames \u2014 desynchronizes LiDAR from cameras in sensor fusion causing 3D object position misregistration",
+      "attack_examples": [
+        "100ms gPTP offset causes LiDAR and camera to disagree on pedestrian position by 3 meters at 30 km/h",
+        "Intermittent gPTP disruption causes fusion pipeline to drop LiDAR data as stale"
+      ],
+      "r155_reference": "T4.1"
+    },
+    {
+      "entry": "Debug_Ports_JTAG",
+      "type": "physical_hardware",
+      "access": "physical_direct",
+      "description": "Debug ports on LiDAR SoC allow direct memory access, HSM key extraction, and firmware replacement \u2014 also enables direct manipulation of laser safety circuits",
+      "attack_examples": [
+        "JTAG extracts HSM cryptographic keys \u2014 enables firmware signing bypass",
+        "Debug port used to patch laser emission controller to disable AE limit enforcement"
+      ],
+      "r155_reference": "T28.2"
+    }
+  ],
+  "threat_catalog": [
+    {
+      "id": "LIDAR_T1",
+      "stride_category": "Spoofing",
+      "title": "LiDAR Point Cloud Injection via Optical Pulse Spoofing",
+      "description": "Attacker uses an external pulsed laser synchronized to LiDAR emission frequency to inject false return pulses into the photodetector \u2014 creating phantom 3D objects (fake obstacles, fake vehicles, fake pedestrians) or removing real objects from the point cloud by overwhelming genuine returns",
+      "target_asset": "lidar_point_cloud",
+      "attack_surface": "Optical_Laser_Return_Channel",
+      "ai_attack_type": "Sensor_Data_Injection",
+      "impact": {
+        "safety": "Critical",
+        "financial": "High",
+        "operational": "Critical"
+      },
+      "likelihood": "Medium",
+      "r155_reference": "T16.3",
+      "enisa_reference": "ENISA_AI_Cybersecurity_2021 \u2014 LiDAR spoofing attack",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "LIDAR_T2",
+      "stride_category": "Denial_of_Service",
+      "title": "LiDAR Photodetector Blinding via High-Power Laser",
+      "description": "Attacker uses a high-power laser or intense light source directed at LiDAR receiver aperture to saturate the photodetector array \u2014 causing complete or partial blindness in the affected sector. IEC 60825-1 governs the victim LiDAR's emission safety but provides no protection against external illumination of its receiver.",
+      "target_asset": "lidar_point_cloud",
+      "attack_surface": "LiDAR_Lens_Blinding",
+      "ai_attack_type": "Sensor_Denial",
+      "impact": {
+        "safety": "Critical",
+        "financial": "High",
+        "operational": "Critical"
+      },
+      "likelihood": "Medium",
+      "r155_reference": "T16.3, T8.2",
+      "enisa_reference": "ENISA_AI_Cybersecurity_2021 \u2014 LiDAR blinding",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "LIDAR_T3",
+      "stride_category": "Tampering",
+      "title": "Unauthorized 6-DOF Calibration Write via Diagnostic Session",
+      "description": "Attacker exploits an authenticated or unauthenticated UDS diagnostic session over DoIP to write modified 6-DOF extrinsic calibration parameters \u2014 causing the entire point cloud to be silently rotated or translated in the vehicle coordinate frame without any observable corruption",
+      "target_asset": "extrinsic_calibration_6dof",
+      "attack_surface": "Calibration_via_Diagnostic_DoIP",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "Critical",
+        "financial": "High",
+        "operational": "Critical"
+      },
+      "likelihood": "Medium",
+      "r155_reference": "T9.1, T18.3",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 Unauthorized diagnostic access",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "LIDAR_T4",
+      "stride_category": "Denial_of_Service",
+      "title": "UdpNM Message Spoofing Forcing LiDAR into Bus-Sleep",
+      "description": "Attacker on vehicle Ethernet sends spoofed AUTOSAR AP UdpNM messages with CBV forcing the LiDAR NM state machine into Ready Sleep or Bus-Sleep state \u2014 taking the LiDAR sensor offline and cutting off point cloud publication to the ADAS fusion pipeline. UdpNM messages are unauthenticated in base AUTOSAR NM spec.",
+      "target_asset": "nm_network_state",
+      "attack_surface": "UdpNM_Network_Management_Channel",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "Critical",
+        "financial": "Medium",
+        "operational": "Critical"
+      },
+      "likelihood": "Medium",
+      "r155_reference": "T4.1, T8.1",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 In-vehicle network attack",
+      "autosar_nm_note": "AUTOSAR AP NM spec R25-11 section 7.10 provides security event reporting infrastructure but no authentication for NM messages \u2014 architectural gap requiring MACsec or application-layer MAC",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "LIDAR_T5",
+      "stride_category": "Tampering",
+      "title": "Malicious OTA Firmware Disabling Laser Safety Interlocks",
+      "description": "Attacker delivers malicious OTA firmware package that disables IEC 60825-1 safety mechanisms in the Laser_Emission_Controller \u2014 removing AE monitoring, disabling beam attenuator activation, or overriding power limiting circuit. Causes LiDAR to operate above AEL in Class 1 \u2014 creating an unlabeled eye hazard.",
+      "target_asset": "lidar_firmware",
+      "attack_surface": "OTA_Update_Channel",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "Critical",
+        "financial": "High",
+        "operational": "Critical"
+      },
+      "likelihood": "Low",
+      "r155_reference": "T12.1",
+      "iec60825_note": "IEC 60825-1 requires Class 1 compliance under fault conditions \u2014 firmware that disables safety mechanisms is a regulatory violation in addition to a cybersecurity threat",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 OTA update attack",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "LIDAR_T6",
+      "stride_category": "Tampering",
+      "title": "Point Cloud MITM Replacement on Ethernet Link",
+      "description": "Attacker performs man-in-the-middle attack on Ethernet link between LiDAR ECU and ADAS/Fusion ECU \u2014 replacing live point cloud stream with pre-recorded scan of a clear environment, causing ADAS to operate on falsified 3D data during approach to an obstacle",
+      "target_asset": "lidar_point_cloud",
+      "attack_surface": "Ethernet_Point_Cloud_Link",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "Critical",
+        "financial": "High",
+        "operational": "Critical"
+      },
+      "likelihood": "Low",
+      "r155_reference": "T5.1",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 In-vehicle network MITM",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "LIDAR_T7",
+      "stride_category": "Spoofing",
+      "title": "gPTP Grandmaster Spoofing Causing Fusion Desynchronization",
+      "description": "Attacker spoofs IEEE 802.1AS gPTP grandmaster clock on vehicle Ethernet, introducing timestamp offset on LiDAR point cloud frames \u2014 causing sensor fusion pipeline to misregister LiDAR object positions relative to camera detections by meters at highway speeds",
+      "target_asset": "gPTP_timestamp",
+      "attack_surface": "gPTP_Time_Synchronization",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "High",
+        "financial": "Low",
+        "operational": "High"
+      },
+      "likelihood": "Low",
+      "r155_reference": "T4.1",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 In-vehicle network attack",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "LIDAR_T8",
+      "stride_category": "Tampering",
+      "title": "Adversarial Point Cloud Input for ML Segmentation Evasion",
+      "description": "Attacker crafts physical objects with specific surface properties (retroreflective patterns, geometry) that cause the LiDAR segmentation ML model to misclassify or fail to detect them \u2014 analogous to adversarial patches for cameras but exploiting ToF geometry and intensity",
+      "target_asset": "lidar_point_cloud",
+      "attack_surface": "Optical_Laser_Return_Channel",
+      "ai_attack_type": "Model_Evasion_Physical",
+      "impact": {
+        "safety": "High",
+        "financial": "Medium",
+        "operational": "High"
+      },
+      "likelihood": "Low",
+      "r155_reference": "T16.3",
+      "enisa_reference": "ENISA_AI_Cybersecurity_2021 \u2014 Adversarial ML physical attack",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "LIDAR_T9",
+      "stride_category": "Tampering",
+      "title": "Laser Emission Config Tampering to Violate IEC 60825-1 Class 1",
+      "description": "Attacker with diagnostic or physical access modifies laser emission configuration parameters (pulse power, duty cycle, repetition rate grouping) causing AE to exceed AEL \u2014 LiDAR operates above Class 1 limits creating undeclared eye hazard. Pulse grouping rules per IEC 60825-1 mean seemingly small parameter changes can cause AE exceedance.",
+      "target_asset": "laser_emission_config",
+      "attack_surface": "Calibration_via_Diagnostic_DoIP",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "Critical",
+        "financial": "High",
+        "operational": "Medium"
+      },
+      "likelihood": "Low",
+      "r155_reference": "T9.1",
+      "iec60825_note": "IEC 60825-1 pulse grouping analysis \u2014 multiple pulses close in time treated as effective single pulse; AEL comparison must use worst-case grouping. Small increases in repetition rate can trigger AEL exceedance.",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "LIDAR_T10",
+      "stride_category": "Elevation_of_Privilege",
+      "title": "JTAG Debug Port Exploitation for Firmware and Safety Bypass",
+      "description": "Attacker with physical access to LiDAR ECU board exploits active JTAG debug port to extract HSM keys, flash modified firmware bypassing secure boot, and directly manipulate laser safety control circuits \u2014 enabling persistent, undetectable compromise of both cyber and laser safety properties",
+      "target_asset": "lidar_ecu_hardware",
+      "attack_surface": "Debug_Ports_JTAG",
+      "ai_attack_type": "None",
+      "impact": {
+        "safety": "Critical",
+        "financial": "High",
+        "operational": "Critical"
+      },
+      "likelihood": "Low",
+      "r155_reference": "T28.2",
+      "enisa_reference": "ENISA_Smart_Cars_2019 \u2014 Physical hardware attack",
+      "iso21434_clause": "clause-11"
+    }
+  ],
+  "security_controls": [
+    {
+      "id": "SC1",
+      "control": "Secure Boot with IEC 60825-1 Safety Lock",
+      "description": "AUTOSAR AP secure boot verifies firmware signature at startup using HSM \u2014 prevents execution of unauthorized firmware that could disable laser safety interlocks. Boot sequence also verifies integrity of Laser_Emission_Controller configuration before enabling emission.",
+      "mitigates": [
+        "LIDAR_T5",
+        "LIDAR_T10"
+      ],
+      "autosar_mechanism": "ara::crypto + HSM",
+      "r155_reference": "T12.1",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC2",
+      "control": "Hardware Laser Safety Interlock (IEC 60825-1)",
+      "description": "Dedicated hardware circuit enforces AE/AEL compliance independent of software \u2014 beam attenuator activates automatically if AE monitoring detects exceedance. Housing interlock disables emission on case opening. Cannot be bypassed by firmware modification alone.",
+      "mitigates": [
+        "LIDAR_T5",
+        "LIDAR_T9"
+      ],
+      "autosar_mechanism": "Hardware Safety Circuit \u2014 independent of AUTOSAR stack",
+      "iec60825_reference": "IEC_60825-1:2014 engineering safety requirements",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC3",
+      "control": "Diagnostic Session Authentication for Calibration",
+      "description": "UDS Security Access (0x27) or Authentication (0x29) service enforces cryptographic challenge-response before extended or programming session \u2014 prevents unauthorized 6-DOF calibration writes and laser emission config modification",
+      "mitigates": [
+        "LIDAR_T3",
+        "LIDAR_T9"
+      ],
+      "autosar_mechanism": "ara::diag UDS Authentication",
+      "r155_reference": "T9.1, T18.3",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC4",
+      "control": "Calibration Integrity HMAC via ara::crypto",
+      "description": "6-DOF extrinsic calibration matrices stored in ara::per are HMAC-protected \u2014 any modification detected on next read before applying transformation to point cloud",
+      "mitigates": [
+        "LIDAR_T3"
+      ],
+      "autosar_mechanism": "ara::per + ara::crypto HMAC",
+      "r155_reference": "T9.1",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC5",
+      "control": "TLS 1.3 on Ethernet Point Cloud Link",
+      "description": "Point cloud stream from LiDAR to ADAS/Fusion ECU transported over TLS 1.3 encrypted Ethernet \u2014 prevents MITM replacement and replay of point cloud data",
+      "mitigates": [
+        "LIDAR_T6"
+      ],
+      "autosar_mechanism": "ara::com SOME/IP + ara::crypto TLS 1.3",
+      "r155_reference": "T5.1",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC6",
+      "control": "MACsec on LiDAR Ethernet Link",
+      "description": "IEEE 802.1AE MACsec provides Layer 2 authentication and encryption on LiDAR Ethernet link \u2014 protects against NM message spoofing, point cloud injection, and MITM attacks at network level",
+      "mitigates": [
+        "LIDAR_T4",
+        "LIDAR_T6",
+        "LIDAR_T7"
+      ],
+      "autosar_mechanism": "MACsec hardware + ara::com",
+      "r155_reference": "T5.1, T4.1",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC7",
+      "control": "UdpNM Security Event Monitoring (ara::idsm)",
+      "description": "ara::idsm monitors NM message traffic for anomalous patterns \u2014 unexpected NM messages from unknown source node IDs, CBV manipulation attempts, and abnormal sleep/wake transition rates are logged and reported. Addresses architectural gap in base UdpNM authentication.",
+      "mitigates": [
+        "LIDAR_T4"
+      ],
+      "autosar_mechanism": "ara::idsm + AUTOSAR NM spec section 7.10 security events",
+      "r155_reference": "T4.1, T8.1",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC8",
+      "control": "OTA Package Signature Verification",
+      "description": "ara::ucm verifies digital signature of all OTA update packages using OEM root of trust in HSM before installation \u2014 prevents malicious firmware deployment that could compromise laser safety circuits",
+      "mitigates": [
+        "LIDAR_T5"
+      ],
+      "autosar_mechanism": "ara::ucm + ara::crypto",
+      "r155_reference": "T12.1",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC9",
+      "control": "gPTP Grandmaster Authentication (IEEE 802.1AS-2020)",
+      "description": "IEEE 802.1AS-2020 secured time synchronization authenticates gPTP grandmaster source \u2014 prevents spoofed time source injection that would desynchronize LiDAR timestamps from camera/radar fusion pipeline",
+      "mitigates": [
+        "LIDAR_T7"
+      ],
+      "autosar_mechanism": "ara::tsync + 802.1AS-2020",
+      "r155_reference": "T4.1",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC10",
+      "control": "JTAG and Debug Port Fusing in Production",
+      "description": "All JTAG and debug ports hardware-fused (permanently disabled) on production LiDAR ECU units \u2014 prevents physical debug exploitation for HSM key extraction, laser safety bypass, and firmware replacement",
+      "mitigates": [
+        "LIDAR_T10"
+      ],
+      "autosar_mechanism": "Hardware Production Configuration",
+      "r155_reference": "T28.2",
+      "iso21434_clause": "clause-10"
+    },
+    {
+      "id": "SC11",
+      "control": "Point Cloud Plausibility Monitor",
+      "description": "Runtime monitor checks statistical properties of incoming point cloud (return density, range distribution, sector coverage) \u2014 detects anomalous injection patterns (sudden phantom cluster appearance, complete sector loss) and flags for ADSM reporting",
+      "mitigates": [
+        "LIDAR_T1",
+        "LIDAR_T2"
+      ],
+      "autosar_mechanism": "Application-level monitor + ara::idsm",
+      "r155_reference": "T16.3",
+      "iso21434_clause": "clause-10"
+    }
+  ],
+  "inter_ecu_relationships": [
+    {
+      "ecu": "ADAS_Fusion_ECU",
+      "relationship": "primary_consumer",
+      "interface": "Ethernet SOME/IP",
+      "data_exchanged": "Vehicle-frame 3D point cloud at 10-20 Hz \u2014 primary input to sensor fusion and object detection pipeline",
+      "trust_level": "trusted_internal",
+      "security_mechanism": "TLS 1.3, E2E protection, SOME/IP service authentication"
+    },
+    {
+      "ecu": "TCU",
+      "relationship": "update_channel",
+      "interface": "Ethernet",
+      "data_exchanged": "OTA firmware and calibration update packages",
+      "trust_level": "conditional",
+      "security_mechanism": "TLS 1.3, OTA package digital signature verification via ara::ucm"
+    },
+    {
+      "ecu": "Gateway_ECU",
+      "relationship": "network_gateway",
+      "interface": "Ethernet",
+      "data_exchanged": "Diagnostic messages routed from external tester via DoIP; NM cluster boundary management",
+      "trust_level": "conditional",
+      "security_mechanism": "DoIP session management, UDS authentication, NM cluster isolation"
+    },
+    {
+      "ecu": "ADAS_ECU_NM_Cluster",
+      "relationship": "nm_peer",
+      "interface": "Ethernet UDP multicast",
+      "data_exchanged": "UdpNM messages (Source Node ID + CBV) for coordinated network sleep/wake",
+      "trust_level": "trusted_internal",
+      "security_mechanism": "MACsec Layer 2 authentication, ara::idsm NM message monitoring"
+    },
+    {
+      "ecu": "gPTP_Grandmaster",
+      "relationship": "time_source",
+      "interface": "Ethernet 802.1AS",
+      "data_exchanged": "IEEE 802.1AS time synchronization messages for point cloud frame timestamping",
+      "trust_level": "trusted_internal",
+      "security_mechanism": "IEEE 802.1AS-2020 grandmaster authentication"
+    }
+  ],
+  "iso21434_tara_context": {
+    "item_definition": {
+      "item": "LiDAR Sensor ECU",
+      "item_boundary": "Includes pulsed laser emitter array, photodetector array, scanning mechanism, IEC 60825-1 safety circuits (beam attenuator, housing interlock, power limiter), DSP/FPGA ToF engine, point cloud processing pipeline, AUTOSAR AP NM state controller, calibration store, and Ethernet publication service",
+      "operational_environment": "All-weather vehicle operation at SAE L2-L4 automation levels; point cloud published continuously during vehicle motion; NM-managed sleep during parking/ignition-off",
+      "relevant_standards": [
+        "ISO21434:2021",
+        "ISO26262:2018",
+        "UNECE_R155",
+        "IEC_60825-1:2014",
+        "SAE_J3016",
+        "AUTOSAR_AP_NM_R25-11"
+      ]
+    },
+    "asset_identification_method": "ISO21434 clause-9 \u2014 Assets identified by CIA triad mapped to safety-critical sensing functions and IEC 60825-1 laser safety compliance requirements",
+    "threat_identification_method": "STRIDE per asset combined with ENISA automotive AI threat taxonomy, UNECE R155 Annex 5 threat list, and IEC 60825-1 fault condition analysis",
+    "damage_scenario_examples": [
+      {
+        "scenario": "DS1",
+        "description": "Vehicle collides with pedestrian because attacker injected phantom obstacle earlier causing ADAS emergency brake, then removed real pedestrian from point cloud during approach",
+        "impact_category": "Safety",
+        "severity": "Critical \u2014 potential fatality",
+        "related_threats": [
+          "LIDAR_T1",
+          "LIDAR_T2"
+        ]
+      },
+      {
+        "scenario": "DS2",
+        "description": "Silent 6-DOF calibration tampering causes all LiDAR-detected objects to be displaced 0.5m laterally \u2014 ADAS path planning uses wrong obstacle positions across entire vehicle fleet after malicious OTA",
+        "impact_category": "Safety and Financial",
+        "severity": "Critical \u2014 fleet-wide safety recall risk",
+        "related_threats": [
+          "LIDAR_T3",
+          "LIDAR_T5"
+        ]
+      },
+      {
+        "scenario": "DS3",
+        "description": "LiDAR taken offline by NM spoofing during highway driving \u2014 ADAS fusion falls back to camera-only mode without driver awareness, degrading obstacle detection in adverse weather",
+        "impact_category": "Safety and Operational",
+        "severity": "Major \u2014 degraded safety margin",
+        "related_threats": [
+          "LIDAR_T4"
+        ]
+      },
+      {
+        "scenario": "DS4",
+        "description": "Malicious OTA disables IEC 60825-1 beam attenuator \u2014 LiDAR emits above Class 1 AEL creating undeclared eye hazard to pedestrians and road workers",
+        "impact_category": "Safety and Legal",
+        "severity": "Critical \u2014 personal injury liability and regulatory violation",
+        "related_threats": [
+          "LIDAR_T5",
+          "LIDAR_T9"
+        ]
+      }
+    ],
+    "cybersecurity_goals": [
+      "CG1: The LiDAR ECU shall publish an authentic, unmanipulated 3D point cloud at all times during active sensing",
+      "CG2: 6-DOF extrinsic calibration shall be protected from unauthorized modification throughout the vehicle lifetime",
+      "CG3: Laser emission shall remain within IEC 60825-1 Class 1 AEL limits under all operating, fault, and update conditions",
+      "CG4: LiDAR firmware shall only be updated via authenticated and integrity-verified OTA packages",
+      "CG5: LiDAR Ethernet network state shall only be controlled by authenticated NM participants",
+      "CG6: LiDAR point cloud timestamps shall remain synchronized with vehicle time domain for accurate sensor fusion"
+    ],
+    "iec60825_tara_mapping": {
+      "standard": "IEC 60825-1:2014 \u2014 Safety of Laser Products",
+      "laser_class": "Class_1 \u2014 AE does not exceed AEL under normal use, maintenance, and fault conditions",
+      "key_tara_implications": [
+        "Laser emission config is a safety-critical asset \u2014 tampering causes AEL exceedance (Class 1 violation)",
+        "Fault condition compliance required \u2014 firmware attacks that disable beam attenuator or AE monitoring are both cyber and laser safety threats",
+        "Pulse grouping analysis (IEC 60825-1) means small parameter changes in repetition rate can cause disproportionate AE increase \u2014 precision attack vector",
+        "Physical safety mechanisms (beam attenuator, housing interlock) must be tamper-evident and hardware-enforced, not software-only"
+      ]
+    },
+    "autosar_nm_tara_mapping": {
+      "spec": "AUTOSAR AP SWS Network Management R25-11 \u2014 UdpNM",
+      "key_tara_implications": [
+        "UdpNM messages are unauthenticated in base spec \u2014 NM spoofing is a viable DoS vector for LiDAR",
+        "NM state machine has three modes: Network Mode (active), Prepare Bus-Sleep, Bus-Sleep \u2014 attacker forcing Bus-Sleep takes LiDAR offline",
+        "Section 7.10 security events provide detection infrastructure but no prevention \u2014 must be supplemented with MACsec or application MAC",
+        "Partial Network Cluster (PNC) support must be configured to prevent unauthorized activation/deactivation of LiDAR network segment"
+      ]
+    }
+  }
+}

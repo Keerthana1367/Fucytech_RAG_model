@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from components import (
     resolve_ecu, list_ecus, build_enriched_query,
     parse_and_fix, print_summary,
-    EMBED_MODEL, GEMINI_MODEL, RETRIEVER_TOP_K,
+    EMBED_MODEL, GEMINI_MODEL, RETRIEVER_TOP_K, REPORTS_PATH
 )
 from ingest import load_all_documents
 from pipeline import build_graph
@@ -158,7 +158,7 @@ def main():
             print(f"  [Error] PDF generation failed: {e}")
 
         # ── NEW: Generate Markdown Knowledge for RAG ─────────────────────
-        md_dir = Path(__file__).parent / "datasets" / "reports_db"
+        md_dir = REPORTS_PATH
         md_dir.mkdir(parents=True, exist_ok=True)
         md_path = md_dir / f"knowledge_{safe_name}.md"
         with open(md_path, "w", encoding="utf-8") as f:

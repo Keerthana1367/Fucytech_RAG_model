@@ -7,7 +7,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 # Base dataset directory (relative to this file's location)
 # ---------------------------------------------------------------------------
-BASE_PATH    = Path(__file__).parent / "datasets"
+BASE_PATH    = Path(__file__).parent / "Knowledge_base"
 
 MITRE_MOBILE = BASE_PATH / "mobileattack.json"
 MITRE_ICS    = BASE_PATH / "icsattack.json"
@@ -20,6 +20,7 @@ CLAUSE_PATH  = BASE_PATH / "clauses"
 REPORTS_PATH = BASE_PATH / "reports_db"
 SECURITY_KB_PATH = BASE_PATH / "security_KB"
 PDF_PATH     = BASE_PATH
+DOMAIN_KB_PATH = BASE_PATH / "ADAS & Autonomous driving"
 
 
 # ---------------------------------------------------------------------------

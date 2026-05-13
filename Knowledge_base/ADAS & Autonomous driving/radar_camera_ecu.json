@@ -1,0 +1,1023 @@
+{
+  "metadata": {
+    "ecu_id": "RADAR_CAMERA_ECU",
+    "version": "1.0",
+    "category": "ADAS_and_Autonomous_Driving",
+    "standards_referenced": [
+      "AUTOSAR_AP_R25-11",
+      "ISO21434:2021",
+      "ISO26262:2018",
+      "UNECE_R155",
+      "SAE_J3016_202104",
+      "SAE_J3061",
+      "ENISA_AI_Autonomous_Driving_2021",
+      "ENISA_Smart_Cars_2019",
+      "ETSI_EN_302_571",
+      "IEEE_802.1AS_TSN"
+    ],
+    "purpose": "RAG knowledge base for TARA pipeline — Radar and Camera ECU domain knowledge",
+    "last_updated": "2025",
+    "notes": "Enriched with ETSI EN 302 571 radio specs, IEEE 802.1AS time sync, AUTOSAR AP sensor interfaces, ENISA AI threat landscape"
+  },
+
+  "ecu_overview": {
+    "full_name": "Radar and Camera Sensor ECU",
+    "type": "perception_sensor_system",
+    "platform": "AUTOSAR_Adaptive_Platform",
+    "automation_level": {
+      "sae_j3016": "L1_to_L4",
+      "description": "Radar and Camera are core sensors for all ADAS automation levels from L1 to L4. Radar provides all-weather object detection; Camera provides visual classification and lane detection."
+    },
+    "asil": "B",
+    "functional_safety_standard": "ISO26262",
+    "cybersecurity_standard": "ISO21434",
+    "primary_function": "Radar detects objects using radio waves measuring distance, velocity, and angle. Camera captures visual scene for object classification, lane detection, and traffic sign recognition. Both sensors feed raw data to ADAS perception stack.",
+    "core_pipeline": "Radar/Camera Raw Data → Signal Processing → Object Detection → Sensor Output → ADAS Perception Stack",
+    "operating_environment": "Real-time, safety-critical, all-weather (radar), daylight and low-light (camera), high-bandwidth data streams",
+    "key_characteristics": [
+      "Radar operates in 77 GHz frequency band for automotive",
+      "Camera uses MIPI CSI-2 for high-bandwidth raw frame transfer",
+      "Both use AUTOSAR AP Sensor Interface for raw data streaming",
+      "IEEE 802.1AS time synchronization for sensor fusion alignment",
+      "V2X uses ETSI EN 302 571 radio band 5855-5925 MHz",
+      "Connected to ADAS ECU via Ethernet"
+    ],
+    "radar_specifics": {
+      "frequency_band": "77 GHz (automotive radar)",
+      "v2x_radio_band": "5855 MHz - 5925 MHz per ETSI EN 302 571",
+      "detection_modes": ["short_range", "medium_range", "long_range"],
+      "measured_parameters": ["distance", "relative_velocity", "angle", "RCS"]
+    },
+    "camera_specifics": {
+      "types": ["monocular", "stereo", "fisheye", "thermal"],
+      "interface": "MIPI_CSI2",
+      "use_cases": ["object_classification", "lane_detection", "traffic_sign_recognition", "pedestrian_detection"],
+      "ai_processing": true
+    }
+  },
+
+  "hardware": {
+    "radar_hardware": {
+      "mcu": "Radar SoC with integrated DSP for signal processing",
+      "processing_units": [
+        {
+          "unit": "DSP",
+          "role": "Radar signal processing — FFT, CFAR, Doppler processing"
+        },
+        {
+          "unit": "CPU",
+          "role": "Object list generation and Ethernet output"
+        },
+        {
+          "unit": "HSM",
+          "role": "Cryptographic operations — SecOC key storage"
+        }
+      ],
+      "antenna": {
+        "type": "MIMO_antenna_array",
+        "tx_channels": "3 TX",
+        "rx_channels": "4 RX",
+        "frequency": "77 GHz"
+      },
+      "interfaces": ["Ethernet", "CAN", "SPI"],
+      "range": {
+        "short_range": "0.2m - 30m",
+        "medium_range": "0.5m - 80m",
+        "long_range": "1m - 250m"
+      }
+    },
+    "camera_hardware": {
+      "mcu": "Image Signal Processor (ISP) SoC",
+      "processing_units": [
+        {
+          "unit": "ISP",
+          "role": "Raw image processing, noise reduction, HDR"
+        },
+        {
+          "unit": "NPU",
+          "role": "On-board AI inference for initial object detection"
+        },
+        {
+          "unit": "HSM",
+          "role": "Cryptographic key storage"
+        }
+      ],
+      "image_sensor": {
+        "type": "CMOS_image_sensor",
+        "resolution": "2MP_to_8MP",
+        "frame_rate": "30_to_60_fps",
+        "dynamic_range": "HDR_supported"
+      },
+      "interfaces": ["MIPI_CSI2", "Ethernet", "CAN"],
+      "variants": ["front_facing", "surround_view", "rear_view"]
+    },
+    "time_synchronization": {
+      "standard": "IEEE_802.1AS_TSN",
+      "mechanism": "PTP_Precision_Time_Protocol",
+      "grandmaster_clock": "Vehicle-level grandmaster via Ethernet switch",
+      "accuracy": "Sub-microsecond synchronization",
+      "purpose": "Align radar and camera timestamps for accurate sensor fusion in ADAS ECU",
+      "components": [
+        "Grandmaster Clock — main time source",
+        "PTP Instances — logical sync entities per ECU",
+        "Sync/Follow_Up/Delay messages — timing exchange",
+        "BMCA — Best Master Clock Algorithm for clock selection"
+      ],
+      "timing_parameters": {
+        "phase_offset": "Time difference between radar and camera nodes",
+        "frequency_offset": "Clock drift compensation",
+        "jitter": "Timing variation — must be minimized for fusion accuracy"
+      }
+    },
+    "communication_interfaces": [
+      "Ethernet (primary — high bandwidth raw data to ADAS ECU)",
+      "MIPI CSI-2 (camera raw frames)",
+      "CAN (object list output, configuration)",
+      "SPI (radar internal configuration)"
+    ],
+    "memory": {
+      "flash": "NVM for firmware, AI models, calibration",
+      "ram": "High-speed RAM for frame buffering and signal processing",
+      "secure_storage": "HSM-protected key vault"
+    }
+  },
+
+  "software": {
+    "platform": "AUTOSAR_Adaptive_Platform",
+    "os": "POSIX-compliant OS or bare-metal RTOS for low-latency",
+    "ara_functional_clusters": [
+      {
+        "service": "ara::com",
+        "full_name": "Communication Management",
+        "role": "Sensor data transfer to ADAS ECU",
+        "features": [
+          "SOME/IP service communication",
+          "Raw Data Stream for high-bandwidth sensor data",
+          "E2E protection for object list messages",
+          "Service Discovery"
+        ],
+        "use": [
+          "Camera raw frames to ADAS perception stack",
+          "Radar object list to ADAS sensor fusion",
+          "Configuration commands from ADAS to sensor ECU"
+        ]
+      },
+      {
+        "service": "ara::exec",
+        "full_name": "Execution Management",
+        "role": "Manages sensor processing application lifecycle",
+        "use": [
+          "Start radar signal processing on boot",
+          "Restart camera pipeline on failure"
+        ]
+      },
+      {
+        "service": "ara::diag",
+        "full_name": "Diagnostic Management",
+        "role": "Sensor health monitoring and fault reporting",
+        "features": ["UDS and DoIP", "DTC reporting", "Authentication"],
+        "use": [
+          "Radar antenna failure detection",
+          "Camera blockage detection",
+          "Sensor misalignment fault logging"
+        ]
+      },
+      {
+        "service": "ara::per",
+        "full_name": "Persistency",
+        "role": "Store sensor calibration data",
+        "use": [
+          "Radar calibration — angle offset, range correction",
+          "Camera intrinsic/extrinsic calibration parameters"
+        ]
+      },
+      {
+        "service": "ara::crypto",
+        "full_name": "Cryptography",
+        "role": "Secure communication and OTA verification",
+        "use": [
+          "Authenticate sensor data messages via SecOC",
+          "Verify OTA update signatures"
+        ]
+      },
+      {
+        "service": "ara::tsync",
+        "full_name": "Time Synchronization",
+        "role": "IEEE 802.1AS PTP synchronization for sensor fusion",
+        "use": [
+          "Align radar and camera timestamps to same time base",
+          "Ensure sub-microsecond accuracy for fusion"
+        ]
+      },
+      {
+        "service": "ara::ucm",
+        "full_name": "Update and Configuration Management",
+        "role": "OTA firmware and calibration updates",
+        "use": [
+          "Radar firmware OTA updates",
+          "Camera AI model updates"
+        ]
+      },
+      {
+        "service": "ara::idsm",
+        "full_name": "Intrusion Detection System Manager",
+        "role": "Monitor sensor data for anomalies and attacks",
+        "use": [
+          "Detect abnormal radar return patterns",
+          "Monitor for unusual camera data injection"
+        ]
+      }
+    ],
+    "radar_processing_pipeline": [
+      {
+        "stage": "RF_Signal_Transmission",
+        "function": "Transmit FMCW chirp signals via antenna",
+        "output": "transmitted_rf_signal"
+      },
+      {
+        "stage": "RF_Signal_Reception",
+        "function": "Receive reflected signals from objects",
+        "output": "raw_adc_samples"
+      },
+      {
+        "stage": "Range_FFT",
+        "function": "Fast Fourier Transform to compute range bins",
+        "output": "range_profile"
+      },
+      {
+        "stage": "Doppler_FFT",
+        "function": "Compute relative velocity via Doppler shift",
+        "output": "range_doppler_map"
+      },
+      {
+        "stage": "CFAR_Detection",
+        "function": "Constant False Alarm Rate — detect objects above noise",
+        "output": "detected_targets"
+      },
+      {
+        "stage": "Angle_Estimation",
+        "function": "Compute angle of detected objects via MIMO",
+        "output": "object_position_angle"
+      },
+      {
+        "stage": "Object_List_Generation",
+        "function": "Generate structured object list with distance, velocity, angle",
+        "output": "radar_object_list"
+      }
+    ],
+    "camera_processing_pipeline": [
+      {
+        "stage": "Image_Capture",
+        "function": "CMOS sensor captures raw Bayer pattern frames",
+        "output": "raw_bayer_frames"
+      },
+      {
+        "stage": "ISP_Processing",
+        "function": "Demosaicing, noise reduction, HDR, white balance",
+        "output": "processed_rgb_frames"
+      },
+      {
+        "stage": "AI_Inference",
+        "function": "On-board NPU runs object detection neural network",
+        "output": "initial_object_detections"
+      },
+      {
+        "stage": "Feature_Extraction",
+        "function": "Extract visual features for ADAS perception stack",
+        "output": "feature_maps"
+      },
+      {
+        "stage": "Output_Encoding",
+        "function": "Encode and stream raw frames + metadata to ADAS ECU",
+        "output": "camera_stream_with_metadata"
+      }
+    ],
+    "v2x_radio_stack": {
+      "standard": "ETSI_EN_302_571",
+      "frequency_band": "5855_MHz_to_5925_MHz",
+      "channel_spacing": "10 MHz",
+      "congestion_control": "Decentralized Congestion Control (DCC)",
+      "coexistence": "Must coexist with CEN DSRC at 5795-5815 MHz",
+      "transmitter": {
+        "power_control": "Transmit Power Control (TPC) — adaptive",
+        "spectrum_mask": "Defined unwanted emission limits",
+        "frequency_stability": "Within defined tolerance limits"
+      },
+      "receiver": {
+        "sensitivity": "Minimum detectable signal threshold",
+        "selectivity": "Adjacent channel rejection",
+        "spurious_emissions": "Must not emit interference"
+      }
+    },
+    "ota_update": {
+      "supported": true,
+      "mechanism": "ara::ucm over TLS via TCU",
+      "verification": "PKI signature check before apply",
+      "rollback": "Supported"
+    }
+  },
+
+  "assets": [
+    {
+      "id": "radar_raw_signal",
+      "type": "sensor_data",
+      "description": "Raw ADC samples from radar receiver before signal processing",
+      "confidentiality": "medium",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Injected or spoofed raw signals create phantom objects or hide real ones before processing",
+      "enisa_category": "Data Asset — Radar raw signal"
+    },
+    {
+      "id": "radar_object_list",
+      "type": "processed_data",
+      "description": "Processed radar output — list of detected objects with distance, velocity, angle",
+      "confidentiality": "low",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Tampered object list causes ADAS to make wrong driving decisions",
+      "enisa_category": "Data Asset — Processed radar output"
+    },
+    {
+      "id": "camera_raw_frames",
+      "type": "sensor_data",
+      "description": "Raw camera frames from CMOS sensor before ISP processing",
+      "confidentiality": "medium",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Adversarial frames fool AI object detection model",
+      "enisa_category": "Data Asset — Camera raw frames"
+    },
+    {
+      "id": "camera_ai_model",
+      "type": "firmware_model",
+      "description": "On-board AI model for initial object detection in camera ECU",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Backdoored model misclassifies objects — pedestrian ignored",
+      "enisa_category": "Software Asset — AI/ML model"
+    },
+    {
+      "id": "sensor_calibration_data",
+      "type": "configuration",
+      "description": "Radar angle/range calibration and camera intrinsic/extrinsic parameters stored in ara::per",
+      "confidentiality": "medium",
+      "integrity": "high",
+      "availability": "medium",
+      "cybersecurity_property": "Tampered calibration causes systematic detection errors and misaligned sensor fusion",
+      "enisa_category": "Data Asset — Calibration configuration"
+    },
+    {
+      "id": "radar_firmware",
+      "type": "firmware",
+      "description": "Radar ECU firmware including signal processing algorithms",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Modified firmware disables detection or introduces backdoor behavior",
+      "enisa_category": "Software Asset — ECU firmware"
+    },
+    {
+      "id": "camera_firmware",
+      "type": "firmware",
+      "description": "Camera ECU firmware including ISP pipeline and AI inference engine",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Modified firmware disables camera or introduces adversarial preprocessing",
+      "enisa_category": "Software Asset — ECU firmware"
+    },
+    {
+      "id": "time_sync_data",
+      "type": "communication_data",
+      "description": "IEEE 802.1AS PTP synchronization messages between radar, camera, and ADAS ECU",
+      "confidentiality": "low",
+      "integrity": "high",
+      "availability": "high",
+      "cybersecurity_property": "Tampered time sync causes timestamp misalignment — sensor fusion produces wrong fused model",
+      "enisa_category": "Communication Asset — Timing data"
+    },
+    {
+      "id": "v2x_radio_data",
+      "type": "communication_data",
+      "description": "V2X radio messages transmitted and received per ETSI EN 302 571",
+      "confidentiality": "low",
+      "integrity": "high",
+      "availability": "medium",
+      "cybersecurity_property": "Spoofed V2X radio messages inject false road conditions or vehicle positions",
+      "enisa_category": "Communication Asset — V2X radio"
+    },
+    {
+      "id": "radar_antenna_hardware",
+      "type": "hardware",
+      "description": "77 GHz MIMO radar antenna array",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Physical tampering with antenna degrades or disables radar detection",
+      "enisa_category": "Hardware Asset — Sensor hardware"
+    }
+  ],
+
+  "data_flows": [
+    {
+      "id": "DF1",
+      "source": "radar_antenna",
+      "destination": "radar_signal_processor",
+      "interface": "internal_SPI_or_PCIe",
+      "autosar_mechanism": "internal_hardware_interface",
+      "data": "raw_adc_samples",
+      "threats": ["radar_spoofing", "signal_injection", "jamming"],
+      "r155_reference": "T16.3 — Interference with sensors"
+    },
+    {
+      "id": "DF2",
+      "source": "radar_signal_processor",
+      "destination": "ADAS_ECU",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::com SOME/IP + E2E",
+      "data": "radar_object_list",
+      "threats": ["tampering", "replay", "MITM", "object_list_injection"],
+      "r155_reference": "T5.2, T6.3"
+    },
+    {
+      "id": "DF3",
+      "source": "camera_cmos_sensor",
+      "destination": "camera_isp",
+      "interface": "MIPI_CSI2",
+      "autosar_mechanism": "Sensor_Interface_RawDataStream",
+      "data": "raw_bayer_frames",
+      "threats": ["adversarial_input", "frame_injection", "camera_blinding"],
+      "r155_reference": "T16.3"
+    },
+    {
+      "id": "DF4",
+      "source": "camera_isp",
+      "destination": "ADAS_ECU",
+      "interface": "Ethernet",
+      "autosar_mechanism": "Sensor_Interface_RawDataStream",
+      "data": "processed_frames_and_metadata",
+      "threats": ["tampering", "replay", "eavesdropping"],
+      "r155_reference": "T5.2, T7.1"
+    },
+    {
+      "id": "DF5",
+      "source": "grandmaster_clock",
+      "destination": "radar_camera_ecu",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::tsync IEEE_802.1AS PTP",
+      "data": "ptp_sync_messages",
+      "threats": ["time_sync_attack", "PTP_spoofing", "delay_attack"],
+      "r155_reference": "T4.1 — Spoofing of messages"
+    },
+    {
+      "id": "DF6",
+      "source": "v2x_radio_module",
+      "destination": "ADAS_ECU",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::com SOME/IP",
+      "data": "v2x_radio_messages",
+      "threats": ["V2X_spoofing", "jamming", "sybil_attack", "replay"],
+      "r155_reference": "T4.1, T4.2, T11.2",
+      "etsi_reference": "ETSI_EN_302_571 — ITS radio band interference"
+    },
+    {
+      "id": "DF7",
+      "source": "TCU",
+      "destination": "sensor_firmware_store",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::ucm over TLS",
+      "data": "ota_update_package",
+      "threats": ["malicious_firmware", "model_replacement", "replay"],
+      "r155_reference": "T12.1"
+    },
+    {
+      "id": "DF8",
+      "source": "ADAS_ECU",
+      "destination": "radar_camera_ecu",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::diag DoIP",
+      "data": "diagnostic_commands",
+      "threats": ["diagnostic_exploit", "calibration_tampering"],
+      "r155_reference": "T9.1, T18.3"
+    }
+  ],
+
+  "attack_surfaces": [
+    {
+      "entry": "Radar_RF_interface",
+      "type": "wireless_sensor",
+      "access": "wireless_proximity",
+      "description": "Attacker transmits spoofed 77 GHz radar signals to inject phantom objects or hide real obstacles",
+      "attack_examples": [
+        "Phantom vehicle injected ahead causes unnecessary emergency braking",
+        "Real obstacle hidden — ADAS does not detect pedestrian",
+        "Radar jamming using broadband noise in 77 GHz band"
+      ],
+      "r155_reference": "T4.1, T16.3"
+    },
+    {
+      "entry": "Camera_optical_interface",
+      "type": "physical_optical",
+      "access": "physical_or_optical",
+      "description": "Attacker uses adversarial patches, strong lights, or laser to deceive or blind camera",
+      "attack_examples": [
+        "Adversarial sticker on stop sign — misclassified by AI",
+        "High-intensity light source blinds camera",
+        "Infrared laser saturates CMOS sensor"
+      ],
+      "r155_reference": "T16.3"
+    },
+    {
+      "entry": "Ethernet_network",
+      "type": "network",
+      "access": "physical_network_tap_or_internal",
+      "description": "Attacker intercepts or injects data on Ethernet between sensor ECU and ADAS ECU",
+      "attack_examples": [
+        "MITM replaces radar object list — phantom objects injected",
+        "Ethernet flooding causes sensor data deadline misses",
+        "Eavesdrop on camera stream for surveillance"
+      ],
+      "r155_reference": "T5.1, T8.1, T7.1"
+    },
+    {
+      "entry": "PTP_time_sync_channel",
+      "type": "network_protocol",
+      "access": "network",
+      "description": "Attacker manipulates IEEE 802.1AS PTP messages to desynchronize radar and camera timestamps causing sensor fusion errors",
+      "attack_examples": [
+        "Inject fake Sync messages — camera timestamp offset from radar",
+        "Delay PTP messages — introduce artificial timing offset",
+        "Claim false grandmaster — take over time source"
+      ],
+      "r155_reference": "T4.1",
+      "ieee_reference": "IEEE_802.1AS — Grandmaster spoofing"
+    },
+    {
+      "entry": "V2X_radio_channel",
+      "type": "wireless_network",
+      "access": "wireless_roadside",
+      "description": "Attacker transmits fake V2X messages in 5.9 GHz ITS band or jams the channel per ETSI EN 302 571",
+      "attack_examples": [
+        "Fake hazard warning message — unnecessary braking",
+        "Jamming 5855-5925 MHz band — V2X communication disabled",
+        "Sybil attack — multiple fake vehicle identities"
+      ],
+      "r155_reference": "T4.1, T4.2",
+      "etsi_reference": "ETSI_EN_302_571 — ITS band jamming"
+    },
+    {
+      "entry": "OTA_update_channel",
+      "type": "remote",
+      "access": "remote_via_TCU",
+      "description": "Malicious OTA replaces radar firmware or camera AI model",
+      "attack_examples": [
+        "Backdoored camera AI model ignores pedestrians",
+        "Radar firmware modified to report wrong distances"
+      ],
+      "r155_reference": "T12.1"
+    },
+    {
+      "entry": "Diagnostic_interface_DoIP",
+      "type": "diagnostic",
+      "access": "network_or_physical",
+      "description": "Attacker uses UDS over DoIP to modify sensor calibration or extract firmware",
+      "attack_examples": [
+        "Modify radar angle calibration — systematic detection offset",
+        "Dump camera firmware via memory read"
+      ],
+      "r155_reference": "T9.1, T18.3"
+    },
+    {
+      "entry": "Physical_sensor_hardware",
+      "type": "physical_hardware",
+      "access": "physical_direct",
+      "description": "Physical tampering with radar antenna or camera lens",
+      "attack_examples": [
+        "Cover radar with absorbing material — detection disabled",
+        "Place IR filter on camera — night vision disabled"
+      ],
+      "r155_reference": "T32.1 — Physical manipulation of systems"
+    }
+  ],
+
+  "threat_catalog": [
+    {
+      "id": "RC_T1",
+      "stride_category": "Spoofing",
+      "title": "Radar Signal Spoofing — Phantom Object Injection",
+      "description": "Attacker transmits spoofed 77 GHz radar signals creating phantom vehicles or obstacles ahead, triggering unnecessary emergency braking or evasive maneuvers",
+      "target_asset": "radar_raw_signal",
+      "attack_surface": "Radar_RF_interface",
+      "ai_attack_type": "Sensor_Spoofing",
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Medium",
+      "r155_reference": "T4.1, T16.3",
+      "enisa_reference": "ENISA_AI_Autonomous_2021 — Radar spoofing",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T2",
+      "stride_category": "Spoofing",
+      "title": "Radar Object Hiding Attack",
+      "description": "Attacker uses radar absorbing material or signal cancellation to hide real obstacles from radar detection",
+      "target_asset": "radar_raw_signal",
+      "attack_surface": "Radar_RF_interface",
+      "ai_attack_type": "Sensor_Spoofing",
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T16.3",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T3",
+      "stride_category": "Spoofing",
+      "title": "Camera Adversarial Input Attack",
+      "description": "Attacker places adversarial patches on road signs or objects to fool camera AI model into misclassification",
+      "target_asset": "camera_raw_frames",
+      "attack_surface": "Camera_optical_interface",
+      "ai_attack_type": "Model_Evasion",
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Medium",
+      "r155_reference": "T16.3",
+      "enisa_reference": "ENISA_AI_Autonomous_2021 — Adversarial ML",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T4",
+      "stride_category": "Spoofing",
+      "title": "PTP Time Sync Spoofing — Grandmaster Attack",
+      "description": "Attacker injects fake IEEE 802.1AS PTP Sync messages or claims false grandmaster role to desynchronize radar and camera timestamps, causing sensor fusion errors in ADAS ECU",
+      "target_asset": "time_sync_data",
+      "attack_surface": "PTP_time_sync_channel",
+      "ai_attack_type": null,
+      "impact": { "safety": "High", "financial": "Medium", "operational": "High" },
+      "likelihood": "Low",
+      "r155_reference": "T4.1",
+      "ieee_reference": "IEEE_802.1AS — BMCA manipulation",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T5",
+      "stride_category": "Spoofing",
+      "title": "V2X Radio Spoofing — Fake Road Events",
+      "description": "Attacker transmits fake V2X messages in ETSI EN 302 571 ITS band broadcasting false hazards, emergency vehicles, or road conditions",
+      "target_asset": "v2x_radio_data",
+      "attack_surface": "V2X_radio_channel",
+      "ai_attack_type": null,
+      "impact": { "safety": "High", "financial": "Medium", "operational": "High" },
+      "likelihood": "Medium",
+      "r155_reference": "T4.1, T4.2, T11.2",
+      "etsi_reference": "ETSI_EN_302_571",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T6",
+      "stride_category": "Tampering",
+      "title": "Radar Object List Tampering — MITM",
+      "description": "Attacker performs MITM on Ethernet between radar ECU and ADAS ECU, modifying object list to add phantom objects or remove real ones",
+      "target_asset": "radar_object_list",
+      "attack_surface": "Ethernet_network",
+      "ai_attack_type": null,
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T5.2, T6.2",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T7",
+      "stride_category": "Tampering",
+      "title": "Camera AI Model Backdoor via OTA",
+      "description": "Malicious OTA update replaces camera AI model with backdoored version that ignores specific object types like pedestrians in certain scenarios",
+      "target_asset": "camera_ai_model",
+      "attack_surface": "OTA_update_channel",
+      "ai_attack_type": "Model_Poisoning_Backdoor",
+      "impact": { "safety": "Critical", "financial": "Critical", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T12.1",
+      "enisa_reference": "ENISA_AI_Autonomous_2021 — Model manipulation",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T8",
+      "stride_category": "Tampering",
+      "title": "Sensor Calibration Manipulation",
+      "description": "Attacker modifies radar angle calibration or camera extrinsic parameters via diagnostic interface causing systematic misdetection",
+      "target_asset": "sensor_calibration_data",
+      "attack_surface": "Diagnostic_interface_DoIP",
+      "ai_attack_type": null,
+      "impact": { "safety": "High", "financial": "Medium", "operational": "High" },
+      "likelihood": "Low",
+      "r155_reference": "T20.5",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T9",
+      "stride_category": "Tampering",
+      "title": "PTP Delay Attack — Sensor Fusion Desync",
+      "description": "Attacker artificially delays IEEE 802.1AS PTP Delay_Request messages to introduce timestamp offsets between radar and camera, causing misaligned sensor fusion",
+      "target_asset": "time_sync_data",
+      "attack_surface": "PTP_time_sync_channel",
+      "ai_attack_type": null,
+      "impact": { "safety": "High", "financial": "Medium", "operational": "High" },
+      "likelihood": "Low",
+      "r155_reference": "T5.2",
+      "ieee_reference": "IEEE_802.1AS — Delay message manipulation",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T10",
+      "stride_category": "Denial_of_Service",
+      "title": "Radar Jamming — 77 GHz Band",
+      "description": "Attacker transmits broadband noise in 77 GHz radar band to saturate radar receiver, completely disabling object detection",
+      "target_asset": "radar_raw_signal",
+      "attack_surface": "Radar_RF_interface",
+      "ai_attack_type": null,
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T8.2, T16.3",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T11",
+      "stride_category": "Denial_of_Service",
+      "title": "Camera Blinding — High Intensity Light",
+      "description": "Attacker uses high-intensity visible or IR light to saturate camera CMOS sensor, blinding visual perception completely",
+      "target_asset": "camera_raw_frames",
+      "attack_surface": "Camera_optical_interface",
+      "ai_attack_type": "Sensor_Blinding",
+      "impact": { "safety": "Critical", "financial": "Medium", "operational": "Critical" },
+      "likelihood": "Medium",
+      "r155_reference": "T8.2, T16.3",
+      "enisa_reference": "ENISA_AI_Autonomous_2021 — Sensor blinding",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T12",
+      "stride_category": "Denial_of_Service",
+      "title": "V2X Channel Jamming — ITS Band",
+      "description": "Attacker jams 5855-5925 MHz ITS radio band per ETSI EN 302 571, disabling all V2X communication including cooperative awareness messages",
+      "target_asset": "v2x_radio_data",
+      "attack_surface": "V2X_radio_channel",
+      "ai_attack_type": null,
+      "impact": { "safety": "High", "financial": "Medium", "operational": "High" },
+      "likelihood": "Medium",
+      "r155_reference": "T8.2",
+      "etsi_reference": "ETSI_EN_302_571 — ITS band jamming",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T13",
+      "stride_category": "Denial_of_Service",
+      "title": "Ethernet Flooding — Sensor Data Deadline Miss",
+      "description": "Attacker floods vehicle Ethernet causing sensor ECU to miss real-time data delivery deadlines to ADAS ECU",
+      "target_asset": "radar_object_list",
+      "attack_surface": "Ethernet_network",
+      "ai_attack_type": null,
+      "impact": { "safety": "Critical", "financial": "Medium", "operational": "Critical" },
+      "likelihood": "Medium",
+      "r155_reference": "T8.1",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T14",
+      "stride_category": "Replay",
+      "title": "Radar/Camera Data Replay Attack",
+      "description": "Attacker records and replays old sensor data to freeze ADAS perception while real environment changes",
+      "target_asset": "radar_object_list",
+      "attack_surface": "Ethernet_network",
+      "ai_attack_type": null,
+      "impact": { "safety": "High", "financial": "Medium", "operational": "High" },
+      "likelihood": "Low",
+      "r155_reference": "T6.3",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T15",
+      "stride_category": "Information_Disclosure",
+      "title": "Camera Stream Eavesdropping — Surveillance",
+      "description": "Attacker intercepts camera stream on Ethernet to extract real-time video of vehicle surroundings for surveillance",
+      "target_asset": "camera_raw_frames",
+      "attack_surface": "Ethernet_network",
+      "ai_attack_type": null,
+      "impact": { "safety": "Low", "financial": "Medium", "operational": "Low", "privacy": "High" },
+      "likelihood": "Medium",
+      "r155_reference": "T7.1",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "RC_T16",
+      "stride_category": "Privilege_Escalation",
+      "title": "Diagnostic Session Exploit — Firmware Extraction",
+      "description": "Attacker uses UDS over DoIP to unlock extended diagnostic session and dump radar or camera firmware/AI model",
+      "target_asset": "radar_firmware",
+      "attack_surface": "Diagnostic_interface_DoIP",
+      "ai_attack_type": null,
+      "impact": { "safety": "High", "financial": "High", "operational": "High" },
+      "likelihood": "Medium",
+      "r155_reference": "T9.1, T18.3",
+      "iso21434_clause": "clause-11"
+    }
+  ],
+
+  "security_controls": [
+    {
+      "type": "SecOC",
+      "mechanism": "CMAC_authentication",
+      "protects": "Radar object list CAN/Ethernet messages",
+      "standard_ref": "AUTOSAR_AP_R25"
+    },
+    {
+      "type": "E2E_protection",
+      "mechanism": "CRC_and_counter",
+      "protects": "Radar and camera data integrity on ara::com events",
+      "standard_ref": "AUTOSAR_AP_R25"
+    },
+    {
+      "type": "TLS_1.3",
+      "mechanism": "Ethernet_encryption",
+      "protects": "Camera stream and radar object list on Ethernet",
+      "standard_ref": "AUTOSAR_AP_R25"
+    },
+    {
+      "type": "MACsec",
+      "mechanism": "Layer2_encryption",
+      "protects": "Ethernet network-level traffic between sensor ECUs and ADAS ECU",
+      "standard_ref": "AUTOSAR_AP_R25"
+    },
+    {
+      "type": "HSM",
+      "mechanism": "key_storage_and_secure_boot",
+      "protects": "Sensor firmware integrity and cryptographic keys",
+      "standard_ref": "AUTOSAR_AP_R25 + ISO21434"
+    },
+    {
+      "type": "OTA_signature_verification",
+      "mechanism": "PKI_digital_signature",
+      "protects": "Radar firmware and camera AI model OTA updates",
+      "standard_ref": "UNECE_R155_Annex5_M16"
+    },
+    {
+      "type": "ara::idsm",
+      "mechanism": "anomaly_detection",
+      "protects": "Abnormal radar return patterns and unusual camera data",
+      "standard_ref": "AUTOSAR_AP_R25 + UNECE_R155"
+    },
+    {
+      "type": "ara::tsync_protection",
+      "mechanism": "PTP_message_authentication",
+      "protects": "IEEE 802.1AS time sync messages from spoofing and delay attacks",
+      "standard_ref": "IEEE_802.1AS + AUTOSAR_AP_R25"
+    },
+    {
+      "type": "V2X_PKI_authentication",
+      "mechanism": "certificate_based_V2X_message_auth",
+      "protects": "V2X radio messages in ETSI EN 302 571 ITS band",
+      "standard_ref": "ETSI_EN_302_571 + UNECE_R155"
+    },
+    {
+      "type": "Radar_FMCW_randomization",
+      "mechanism": "Random_chirp_sequence",
+      "protects": "Radar from replay and synchronization-based spoofing attacks",
+      "standard_ref": "Automotive_radar_best_practices"
+    },
+    {
+      "type": "ara::iam",
+      "mechanism": "role_based_access_control",
+      "protects": "Diagnostic interface and sensor configuration access",
+      "standard_ref": "AUTOSAR_AP_R25 + UNECE_R155_M18"
+    },
+    {
+      "type": "AI_model_validation",
+      "mechanism": "adversarial_robustness_testing",
+      "protects": "Camera AI model from adversarial input attacks",
+      "standard_ref": "ENISA_AI_Autonomous_2021 + SAE_J3061"
+    }
+  ],
+
+  "inter_ecu_relationships": [
+    {
+      "from": "Radar_ECU", "to": "ADAS_ECU",
+      "protocol": "Ethernet",
+      "autosar_mechanism": "ara::com SOME/IP + E2E",
+      "data": "radar_object_list",
+      "security": "TLS_1.3 + E2E + SecOC"
+    },
+    {
+      "from": "Camera_ECU", "to": "ADAS_ECU",
+      "protocol": "Ethernet",
+      "autosar_mechanism": "Sensor_Interface_RawDataStream",
+      "data": "camera_frames_and_metadata",
+      "security": "TLS_1.3 + MACsec"
+    },
+    {
+      "from": "Grandmaster_Clock", "to": "Radar_Camera_ECU",
+      "protocol": "Ethernet",
+      "autosar_mechanism": "ara::tsync IEEE_802.1AS",
+      "data": "ptp_sync_messages",
+      "security": "PTP_message_authentication"
+    },
+    {
+      "from": "V2X_Radio_Module", "to": "ADAS_ECU",
+      "protocol": "Ethernet",
+      "autosar_mechanism": "ara::com SOME/IP",
+      "data": "v2x_messages",
+      "security": "V2X_PKI_certificate_auth"
+    },
+    {
+      "from": "TCU", "to": "Radar_Camera_ECU",
+      "protocol": "Ethernet",
+      "autosar_mechanism": "ara::ucm",
+      "data": "ota_update_package",
+      "security": "TLS + PKI signature"
+    },
+    {
+      "from": "Gateway", "to": "Radar_Camera_ECU",
+      "protocol": "Ethernet",
+      "autosar_mechanism": "ara::diag DoIP",
+      "data": "diagnostic_commands",
+      "security": "DoIP + ara::iam"
+    }
+  ],
+
+  "iso21434_tara_context": {
+    "item_definition": "Radar and Camera Sensor ECU providing raw and processed sensor data for ADAS perception stack at SAE L1-L4",
+    "item_boundary": "Includes 77 GHz radar antenna and signal processor, CMOS camera with ISP, AI inference engine, IEEE 802.1AS time sync, V2X radio per ETSI EN 302 571, and Ethernet interface to ADAS ECU",
+    "cybersecurity_goals": [
+      "Radar signal integrity shall be protected to prevent phantom object injection",
+      "Camera frame integrity shall be maintained to prevent adversarial input attacks",
+      "Sensor calibration data shall be protected from unauthorized modification",
+      "IEEE 802.1AS time sync shall be authenticated to prevent fusion desynchronization",
+      "V2X radio messages shall be authenticated per ETSI EN 302 571",
+      "Sensor firmware and AI models shall be verified before OTA update"
+    ],
+    "damage_scenarios": [
+      {
+        "id": "DS1",
+        "description": "Phantom object injected via radar spoofing causes unnecessary emergency braking — rear collision risk",
+        "impact_category": "Safety",
+        "severity": "Critical",
+        "linked_threats": ["RC_T1", "RC_T6"]
+      },
+      {
+        "id": "DS2",
+        "description": "Camera AI model backdoor causes pedestrian to be ignored — collision",
+        "impact_category": "Safety",
+        "severity": "Critical",
+        "linked_threats": ["RC_T3", "RC_T7"]
+      },
+      {
+        "id": "DS3",
+        "description": "PTP time sync attack desynchronizes radar and camera timestamps — sensor fusion produces wrong environment model",
+        "impact_category": "Safety + Operational",
+        "severity": "High",
+        "linked_threats": ["RC_T4", "RC_T9"]
+      },
+      {
+        "id": "DS4",
+        "description": "Radar jamming and camera blinding simultaneously disable all perception — ADAS blind",
+        "impact_category": "Safety",
+        "severity": "Critical",
+        "linked_threats": ["RC_T10", "RC_T11"]
+      },
+      {
+        "id": "DS5",
+        "description": "V2X channel jamming disables cooperative driving — vehicle unaware of road hazards",
+        "impact_category": "Safety + Operational",
+        "severity": "High",
+        "linked_threats": ["RC_T5", "RC_T12"]
+      }
+    ],
+    "etsi_en_302_571_context": {
+      "frequency_band": "5855-5925 MHz ITS band",
+      "key_threats": [
+        "Channel jamming in ITS band",
+        "Fake V2X message injection",
+        "Sybil attack via multiple false identities",
+        "Congestion attack — exceed DCC limits"
+      ]
+    },
+    "ieee_802_1as_context": {
+      "sync_accuracy": "Sub-microsecond required for sensor fusion",
+      "key_threats": [
+        "Grandmaster clock spoofing via BMCA manipulation",
+        "PTP message delay injection",
+        "False Announce messages — rogue grandmaster"
+      ]
+    },
+    "sae_j3061_lifecycle_phases": [
+      "Concept — cybersecurity goals per sensor type",
+      "Development — sensor signal authentication design",
+      "Validation — radar spoofing, camera adversarial, PTP attack tests",
+      "Operation — ara::idsm monitoring of sensor anomalies",
+      "Incident response — OTA patch via ara::ucm"
+    ],
+    "relevant_clauses": [
+      "clause-9 — Item definition",
+      "clause-10 — Cybersecurity requirements",
+      "clause-11 — TARA",
+      "clause-15 — Threat analysis methods"
+    ]
+  }
+}
