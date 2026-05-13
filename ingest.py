@@ -15,6 +15,7 @@ from pypdf import PdfReader
 from components import (
     MITRE_MOBILE, MITRE_ICS, ATM_PATH, CAPEC_PATH, CWE_PATH,
     ECU_PATH, ANNEX_PATH, CLAUSE_PATH, REPORTS_PATH, SECURITY_KB_PATH, PDF_PATH, MAX_CHARS,
+    DOMAIN_KB_PATH
 )
 
 
@@ -177,7 +178,7 @@ def ingest_iso_clauses(clause_dir) -> list[Document]:
 
 def ingest_annex(annex_path) -> list[Document]:
     if not Path(annex_path).exists():
-        print("⚠️  Annex file not found — skipping.")
+        print("[Warning] Annex file not found — skipping.")
         return []
     with open(annex_path, "r", encoding="utf-8") as f:
         annex = json.load(f)
@@ -437,7 +438,7 @@ def ingest_pdfs(pdf_dir) -> list[Document]:
     try:
         from pypdf import PdfReader
     except ImportError:
-        print("⚠️  pypdf not installed. Skipping PDF ingestion.")
+        print("[Warning] pypdf not installed. Skipping PDF ingestion.")
         return []
 
     for pdf_file in sorted(path.glob("*.pdf")):
@@ -474,7 +475,7 @@ def ingest_pdfs(pdf_dir) -> list[Document]:
             docs.extend(p_docs)
             print(f"    {fname}: {len(p_docs)} chunks created.")
         except Exception as e:
-            print(f"  ❌ Error processing {fname}: {e}")
+            print(f"  [Error] Error processing {fname}: {e}")
 
     return docs
 
@@ -561,6 +562,106 @@ def ingest_security_kb(kb_dir) -> list[Document]:
     return docs
 
 
+def ingest_domain_kb(domain_dir) -> list[Document]:
+    """Ingest structured domain knowledge JSON files (e.g. ADAS & Autonomous Driving)."""
+    docs = []
+    path = Path(domain_dir)
+    if not path.exists():
+        print(f"  Domain KB folder not found: {domain_dir}")
+        return docs
+
+    for json_file in sorted(path.glob("*.json")):
+        fname = json_file.name
+        with open(json_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        
+        source_name = f"DOMAIN_KB_{json_file.stem.upper()}"
+        print(f"  Ingesting Domain KB: {fname}...")
+
+        # 1. ECU Overview
+        if "ecu_overview" in data:
+            overview = data["ecu_overview"]
+            docs.append(Document(
+                content=f"ECU Overview [{fname}]:\n{json.dumps(overview, indent=2)}",
+                meta={"source": source_name, "type": "overview"}
+            ))
+
+        # 2. Hardware
+        if "hardware" in data:
+            hw = data["hardware"]
+            # General hardware info
+            hw_summary = {k: v for k, v in hw.items() if k not in ["processing_units", "sensors"]}
+            docs.append(Document(
+                content=f"Hardware Specification [{fname}]:\n{json.dumps(hw_summary, indent=2)}",
+                meta={"source": source_name, "type": "hardware_summary"}
+            ))
+            # Units
+            for unit in hw.get("processing_units", []):
+                docs.append(Document(
+                    content=f"Processing Unit [{fname}]: {unit.get('unit')}\nRole: {unit.get('role')}",
+                    meta={"source": source_name, "type": "hardware_unit"}
+                ))
+            # Sensors
+            for sensor in hw.get("sensors", []):
+                docs.append(Document(
+                    content=f"Sensor [{fname}]: {sensor.get('id')}\n{json.dumps(sensor, indent=2)}",
+                    meta={"source": source_name, "type": "sensor"}
+                ))
+
+        # 3. Software
+        if "software" in data:
+            sw = data["software"]
+            # Functional Clusters
+            for cluster in sw.get("ara_functional_clusters", []):
+                docs.append(Document(
+                    content=f"AUTOSAR Service [{fname}]: {cluster.get('service')}\n{json.dumps(cluster, indent=2)}",
+                    meta={"source": source_name, "type": "autosar_service"}
+                ))
+            # Application Layer
+            for module in sw.get("application_layer", []):
+                docs.append(Document(
+                    content=f"Software Module [{fname}]: {module.get('module')}\n{json.dumps(module, indent=2)}",
+                    meta={"source": source_name, "type": "software_module"}
+                ))
+            # AI Lifecycle
+            if "ai_lifecycle" in data["software"]:
+                docs.append(Document(
+                    content=f"AI Lifecycle & Attack Surface [{fname}]:\n{json.dumps(data['software']['ai_lifecycle'], indent=2)}",
+                    meta={"source": source_name, "type": "ai_lifecycle"}
+                ))
+
+        # 4. Assets
+        for asset in data.get("assets", []):
+            docs.append(Document(
+                content=f"Domain Asset [{fname}]: {asset.get('id')}\n{json.dumps(asset, indent=2)}",
+                meta={"source": source_name, "type": "asset"}
+            ))
+
+        # 5. Data Flows
+        for flow in data.get("data_flows", []):
+            docs.append(Document(
+                content=f"Data Flow [{fname}]: {flow.get('id')} ({flow.get('source')} -> {flow.get('destination')})\n{json.dumps(flow, indent=2)}",
+                meta={"source": source_name, "type": "data_flow"}
+            ))
+
+        # 6. Attack Surfaces
+        for surface in data.get("attack_surfaces", []):
+            docs.append(Document(
+                content=f"Attack Surface [{fname}]: {surface.get('entry')}\n{json.dumps(surface, indent=2)}",
+                meta={"source": source_name, "type": "attack_surface"}
+            ))
+
+        # 7. Threat Catalog
+        for threat in data.get("threat_catalog", []):
+            docs.append(Document(
+                content=f"Domain Threat [{fname}]: {threat.get('id')} - {threat.get('title')}\n{json.dumps(threat, indent=2)}",
+                meta={"source": source_name, "type": "threat"}
+            ))
+
+    print(f"DOMAIN_KB total chunks: {len(docs)}")
+    return docs
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Master loader
 # ─────────────────────────────────────────────────────────────────────────────
@@ -594,8 +695,11 @@ def load_all_documents() -> list[Document]:
     print("\nLoading SECURITY KB...")
     kb_custom_docs = ingest_security_kb(SECURITY_KB_PATH)
 
+    print("\nLoading DOMAIN KB (ADAS & Autonomous Driving)...")
+    domain_docs = ingest_domain_kb(DOMAIN_KB_PATH)
+
     all_docs  = ecu_docs + iso_docs + annex_docs
-    all_docs += mitre_docs + atm_docs + capec_docs + cwe_docs + reports_docs + kb_docs + pdf_docs + kb_custom_docs
+    all_docs += mitre_docs + atm_docs + capec_docs + cwe_docs + reports_docs + kb_docs + pdf_docs + kb_custom_docs + domain_docs
 
     print(f"\n{'='*50}")
     print(f"Total documents: {len(all_docs)}")

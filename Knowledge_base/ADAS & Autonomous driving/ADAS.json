@@ -1,0 +1,995 @@
+{
+  "metadata": {
+    "ecu_id": "ADAS_1",
+    "version": "2.0",
+    "category": "ADAS_and_Autonomous_Driving",
+    "standards_referenced": [
+      "AUTOSAR_AP_R25-11",
+      "ISO21434:2021",
+      "ISO26262:2018",
+      "UNECE_R155",
+      "SAE_J3016_202104",
+      "SAE_J3061",
+      "ENISA_AI_Autonomous_Driving_2021",
+      "ENISA_Smart_Cars_2019"
+    ],
+    "purpose": "RAG knowledge base for TARA pipeline — ADAS ECU domain knowledge",
+    "last_updated": "2025",
+    "notes": "Enriched with AUTOSAR AP functional clusters, ENISA AI threat landscape, SAE J3016/J3061 lifecycle"
+  },
+
+  "ecu_overview": {
+    "full_name": "Advanced Driver Assistance System ECU",
+    "type": "perception_and_control",
+    "platform": "AUTOSAR_Adaptive_Platform",
+    "automation_level": {
+      "sae_j3016": "L2_to_L3",
+      "description": "Partial to conditional automation — system controls driving but human must supervise or take over on request",
+      "l2_features": ["ACC", "LKA", "AEB", "LCA"],
+      "l3_features": ["Traffic_Jam_Assist", "Highway_Pilot"]
+    },
+    "asil": "B",
+    "functional_safety_standard": "ISO26262",
+    "cybersecurity_standard": "ISO21434",
+    "primary_function": "Perceives the vehicle environment using sensors, processes data using AI/ML algorithms, and assists or controls driving decisions such as lane keeping, adaptive cruise control, automatic emergency braking, and object detection.",
+    "core_pipeline": "Sensors → Perception → Fusion → Planning → Control → Actuation",
+    "operating_environment": "Real-time, safety-critical, high compute demand, connected to multiple sensors and vehicle networks",
+    "key_characteristics": [
+      "Real-time sensor processing (camera, radar, lidar)",
+      "High compute for AI/ML inference",
+      "Service-oriented architecture (SOA) via AUTOSAR AP",
+      "Runs on POSIX-based OS (Linux/QNX)",
+      "Connected to CP ECUs for actuation"
+    ]
+  },
+
+  "hardware": {
+    "mcu": "High-performance SoC with hardware accelerator (e.g., GPU/NPU for AI inference)",
+    "processing_units": [
+      {
+        "unit": "CPU_cluster",
+        "role": "OS and application logic execution"
+      },
+      {
+        "unit": "NPU_GPU",
+        "role": "Neural network inference for perception — safe hardware acceleration per AUTOSAR AP"
+      },
+      {
+        "unit": "HSM",
+        "role": "Cryptographic operations and key storage — supports ara::crypto"
+      }
+    ],
+    "sensors": [
+      {
+        "id": "front_camera",
+        "type": "monocular_or_stereo_camera",
+        "interface": "MIPI_CSI2",
+        "autosar_interface": "Sensor_Interface_RawDataStream",
+        "function": "Lane detection, object classification, traffic sign recognition",
+        "data_type": "raw_video_frames",
+        "bandwidth": "high"
+      },
+      {
+        "id": "radar_sensor",
+        "type": "short_and_long_range_radar",
+        "interface": "Ethernet_or_CAN",
+        "autosar_interface": "ara::com SOME/IP",
+        "function": "Object distance and velocity measurement, works in all weather",
+        "data_type": "radar_point_cloud",
+        "bandwidth": "medium"
+      },
+      {
+        "id": "lidar_sensor",
+        "type": "3D_LiDAR",
+        "interface": "Ethernet",
+        "autosar_interface": "Sensor_Interface_RawDataStream",
+        "function": "3D point cloud generation, precise object mapping",
+        "data_type": "lidar_point_cloud",
+        "bandwidth": "very_high"
+      },
+      {
+        "id": "ultrasonic_sensors",
+        "type": "proximity",
+        "interface": "LIN",
+        "autosar_interface": "ara::com",
+        "function": "Short range obstacle detection for parking assistance",
+        "data_type": "distance_measurements",
+        "bandwidth": "low"
+      },
+      {
+        "id": "gnss",
+        "type": "GPS_GNSS_module",
+        "interface": "UART_or_Ethernet",
+        "autosar_interface": "ara::com",
+        "function": "Global positioning for localization and map matching",
+        "data_type": "position_velocity_time",
+        "bandwidth": "low"
+      }
+    ],
+    "actuator_interfaces": [
+      "Ethernet to VCU for drive commands",
+      "CAN to steering and braking ECUs (CP ECUs)"
+    ],
+    "communication_interfaces": [
+      "Ethernet (primary — high bandwidth sensor data, SOME/IP)",
+      "CAN (vehicle network commands to CP ECUs)",
+      "MIPI CSI-2 (camera raw data stream)",
+      "LIN (ultrasonic sensors)",
+      "V2X (vehicle to everything communication — 802.11p or C-V2X)"
+    ],
+    "memory": {
+      "flash": "Large NVM for AI model storage and OTA updates",
+      "ram": "High-speed RAM for real-time inference",
+      "secure_storage": "HSM-protected key vault for cryptographic material",
+      "persistent_storage": "ara::per managed key-value and file storage for calibration and config"
+    }
+  },
+
+  "software": {
+    "platform": "AUTOSAR_Adaptive_Platform",
+    "os": "POSIX-compliant OS (e.g., QNX, Linux with RT patch)",
+    "ara_functional_clusters": [
+      {
+        "service": "ara::com",
+        "full_name": "Communication Management",
+        "role": "Service-oriented communication between ADAS components and other ECUs",
+        "features": [
+          "SOME/IP service communication",
+          "Service Discovery (dynamic)",
+          "Event-based and method-based communication",
+          "E2E protection for safety-critical data",
+          "MACsec secure communication support"
+        ],
+        "adas_use": [
+          "Camera ECU to ADAS ECU video stream",
+          "Radar ECU to fusion module",
+          "ADAS to Brake ECU commands"
+        ]
+      },
+      {
+        "service": "ara::exec",
+        "full_name": "Execution Management",
+        "role": "Manages ADAS application lifecycle",
+        "features": [
+          "Process start/stop/restart",
+          "Execution dependencies management",
+          "Error recovery handling",
+          "Function group state control"
+        ],
+        "adas_use": [
+          "Start perception module only when sensors are ready",
+          "Restart failed AI model safely without vehicle disruption"
+        ]
+      },
+      {
+        "service": "ara::diag",
+        "full_name": "Diagnostic Management",
+        "role": "Health monitoring and fault reporting",
+        "features": [
+          "UDS and DoIP support",
+          "Diagnostic conversations",
+          "Authentication and access control",
+          "DTC (Diagnostic Trouble Codes)"
+        ],
+        "adas_use": [
+          "Camera failure detection",
+          "Radar misalignment error reporting",
+          "ADAS ECU fault logging"
+        ]
+      },
+      {
+        "service": "ara::per",
+        "full_name": "Persistency",
+        "role": "Store ADAS data and configuration",
+        "features": [
+          "Key-value storage",
+          "File storage",
+          "Encryption and redundancy",
+          "Versioning and update handling"
+        ],
+        "adas_use": [
+          "Sensor calibration data storage",
+          "ML model parameter persistence",
+          "Sensor configuration management"
+        ]
+      },
+      {
+        "service": "ara::crypto",
+        "full_name": "Cryptography",
+        "role": "Cryptographic operations for security",
+        "features": [
+          "TLS 1.3 for secure communication",
+          "Digital signature verification for OTA",
+          "Key management via HSM"
+        ],
+        "adas_use": [
+          "Secure Ethernet communication to VCU",
+          "OTA update package signature verification"
+        ]
+      },
+      {
+        "service": "ara::idsm",
+        "full_name": "Intrusion Detection System Manager",
+        "role": "Runtime anomaly detection and security monitoring",
+        "features": [
+          "Network traffic monitoring",
+          "Application behavior monitoring",
+          "Security event reporting"
+        ],
+        "adas_use": [
+          "Detect abnormal sensor data patterns",
+          "Monitor Ethernet traffic for injection attacks"
+        ]
+      },
+      {
+        "service": "ara::ucm",
+        "full_name": "Update and Configuration Management",
+        "role": "OTA update handling for ADAS software and AI models",
+        "features": [
+          "Secure software update pipeline",
+          "Rollback support",
+          "Update verification"
+        ],
+        "adas_use": [
+          "AI model OTA updates",
+          "Firmware updates via TCU"
+        ]
+      },
+      {
+        "service": "ara::core",
+        "full_name": "Core",
+        "role": "Base C++ APIs and data types for all ADAS applications",
+        "features": [
+          "Error handling (Result, ErrorCode)",
+          "Thread safety",
+          "Async handling (Future/Promise)",
+          "Logging and tracing"
+        ],
+        "adas_use": [
+          "Safe handling of real-time sensor data processing",
+          "Managing large sensor data buffers"
+        ]
+      },
+      {
+        "service": "ara::tsync",
+        "full_name": "Time Synchronization",
+        "role": "Ensures synchronized timestamps across all sensors and ECUs",
+        "adas_use": [
+          "Synchronize camera, radar, LiDAR timestamps for sensor fusion accuracy"
+        ]
+      },
+      {
+        "service": "ara::iam",
+        "full_name": "Identity and Access Management",
+        "role": "Controls access to ADAS services and resources",
+        "adas_use": [
+          "Restrict diagnostic access to authorized sessions only",
+          "Control which ECUs can send commands to ADAS"
+        ]
+      }
+    ],
+    "application_layer": [
+      {
+        "module": "Perception_Stack",
+        "function": "Fuses sensor data from camera, radar, LiDAR to build environment model",
+        "ai_based": true,
+        "inputs": ["raw_camera_frames", "radar_point_cloud", "lidar_point_cloud"],
+        "outputs": ["environment_model"]
+      },
+      {
+        "module": "Object_Detection_and_Classification",
+        "function": "AI/ML neural network inference for pedestrian, vehicle, obstacle detection",
+        "ai_based": true,
+        "inputs": ["environment_model"],
+        "outputs": ["object_list"]
+      },
+      {
+        "module": "Sensor_Fusion",
+        "function": "Combines outputs of multiple sensors to reduce uncertainty and improve accuracy",
+        "ai_based": false,
+        "inputs": ["camera_data", "radar_data", "lidar_data", "gnss_data"],
+        "outputs": ["fused_environment_model"]
+      },
+      {
+        "module": "Path_Planning",
+        "function": "Computes safe trajectory based on environment model and vehicle state",
+        "ai_based": true,
+        "inputs": ["object_list", "gnss_position", "map_data"],
+        "outputs": ["planned_trajectory"]
+      },
+      {
+        "module": "ADAS_Feature_Manager",
+        "function": "Manages ADAS features: AEB, ACC, LKA, LCA, TJA",
+        "ai_based": false,
+        "inputs": ["planned_trajectory", "vehicle_state"],
+        "outputs": ["driving_commands"]
+      },
+      {
+        "module": "V2X_Handler",
+        "function": "Processes vehicle-to-everything messages for cooperative driving",
+        "ai_based": false,
+        "inputs": ["v2x_messages"],
+        "outputs": ["cooperative_driving_data"]
+      }
+    ],
+    "ai_lifecycle": {
+      "stages": [
+        "Data collection from sensors",
+        "Data preprocessing and labeling",
+        "Model training",
+        "Model validation and adversarial robustness testing",
+        "Model deployment via OTA",
+        "Model monitoring and maintenance"
+      ],
+      "attack_surface_per_stage": {
+        "data_collection": "Data poisoning attack",
+        "model_training": "Backdoor injection into model weights",
+        "model_deployment": "Malicious OTA model replacement",
+        "model_inference": "Adversarial input — evasion attack"
+      }
+    },
+    "ota_update": {
+      "supported": true,
+      "mechanism": "ara::ucm over TLS via TCU",
+      "verification": "Cryptographic PKI signature check before apply",
+      "rollback": "Supported — previous version restored on failure"
+    },
+    "application_lifecycle": [
+      "Boot → ara::exec starts system",
+      "ara::com initializes communication",
+      "Sensor services discovered via Service Discovery",
+      "ADAS perception and planning apps start",
+      "Real-time data processing begins",
+      "Decisions sent to VCU via Ethernet",
+      "ara::diag + ara::idsm active for monitoring"
+    ]
+  },
+
+  "assets": [
+    {
+      "id": "sensor_raw_data",
+      "type": "sensor_data",
+      "description": "Raw camera frames, radar point clouds, LiDAR scans",
+      "confidentiality": "medium",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Integrity and availability are safety-critical — corrupted sensor data leads to wrong driving decisions",
+      "enisa_category": "Data Asset — Sensor raw data"
+    },
+    {
+      "id": "ai_ml_model",
+      "type": "firmware_model",
+      "description": "Trained neural network models for object detection and classification",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Model tampering can cause misclassification of objects. Backdoored model can behave maliciously on specific trigger inputs.",
+      "enisa_category": "Software Asset — AI/ML model"
+    },
+    {
+      "id": "training_dataset",
+      "type": "data",
+      "description": "Labeled datasets used to train the ADAS AI perception models",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "medium",
+      "cybersecurity_property": "Poisoned training data causes model to learn incorrect behavior — data poisoning attack vector",
+      "enisa_category": "Data Asset — Training dataset"
+    },
+    {
+      "id": "object_list",
+      "type": "processed_data",
+      "description": "List of detected and classified objects with position, velocity, type",
+      "confidentiality": "low",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Corrupted object list directly affects path planning and vehicle control",
+      "enisa_category": "Data Asset — Processed perception output"
+    },
+    {
+      "id": "map_data",
+      "type": "configuration_data",
+      "description": "HD map data used for localization and path planning",
+      "confidentiality": "medium",
+      "integrity": "high",
+      "availability": "high",
+      "cybersecurity_property": "Tampered map data leads to wrong navigation and path planning decisions",
+      "enisa_category": "Data Asset — Map data"
+    },
+    {
+      "id": "gnss_position",
+      "type": "sensor_data",
+      "description": "Vehicle location data from GNSS module",
+      "confidentiality": "medium",
+      "integrity": "high",
+      "availability": "high",
+      "cybersecurity_property": "Spoofed GNSS data causes wrong localization and navigation decisions",
+      "enisa_category": "Data Asset — Vehicle state data"
+    },
+    {
+      "id": "adas_firmware",
+      "type": "firmware",
+      "description": "ADAS ECU software including OS, middleware, and AUTOSAR AP stack",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Unauthorized firmware modification can introduce malicious behavior or disable safety features",
+      "enisa_category": "Software Asset — ECU firmware"
+    },
+    {
+      "id": "calibration_data",
+      "type": "configuration",
+      "description": "Sensor calibration parameters and system configuration stored via ara::per",
+      "confidentiality": "medium",
+      "integrity": "high",
+      "availability": "medium",
+      "cybersecurity_property": "Tampered calibration degrades perception accuracy systematically",
+      "enisa_category": "Data Asset — Configuration"
+    },
+    {
+      "id": "v2x_messages",
+      "type": "communication_data",
+      "description": "Incoming V2X messages from infrastructure and other vehicles (CAM, DENM)",
+      "confidentiality": "low",
+      "integrity": "high",
+      "availability": "medium",
+      "cybersecurity_property": "Spoofed V2X messages cause wrong cooperative driving decisions",
+      "enisa_category": "Communication Asset — V2X"
+    },
+    {
+      "id": "driving_commands",
+      "type": "actuator_signal",
+      "description": "Commands sent to VCU for steering, braking, acceleration",
+      "confidentiality": "low",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Injected commands can directly cause loss of vehicle control",
+      "enisa_category": "Communication Asset — Control signal"
+    },
+    {
+      "id": "adas_ecu_hardware",
+      "type": "hardware",
+      "description": "The ADAS SoC including GPU/NPU and HSM",
+      "confidentiality": "high",
+      "integrity": "critical",
+      "availability": "critical",
+      "cybersecurity_property": "Physical compromise of hardware enables debug port attacks and key extraction",
+      "enisa_category": "Hardware Asset — ECU"
+    }
+  ],
+
+  "data_flows": [
+    {
+      "id": "DF1",
+      "source": "front_camera",
+      "destination": "perception_stack",
+      "interface": "MIPI_CSI2",
+      "autosar_mechanism": "Sensor_Interface_RawDataStream",
+      "data": "raw_camera_frames",
+      "threats": ["adversarial_input", "camera_blinding", "sensor_spoofing"],
+      "r155_reference": "T16.3"
+    },
+    {
+      "id": "DF2",
+      "source": "radar_sensor",
+      "destination": "sensor_fusion",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::com SOME/IP event",
+      "data": "radar_point_cloud",
+      "threats": ["sensor_spoofing", "radar_jamming", "replay"],
+      "r155_reference": "T4.1"
+    },
+    {
+      "id": "DF3",
+      "source": "lidar_sensor",
+      "destination": "sensor_fusion",
+      "interface": "Ethernet",
+      "autosar_mechanism": "Sensor_Interface_RawDataStream",
+      "data": "lidar_point_cloud",
+      "threats": ["lidar_spoofing", "lidar_blinding", "DoS"],
+      "r155_reference": "T16.3"
+    },
+    {
+      "id": "DF4",
+      "source": "sensor_fusion",
+      "destination": "object_detection_module",
+      "interface": "internal_IPC",
+      "autosar_mechanism": "ara::com internal method call",
+      "data": "fused_environment_model",
+      "threats": ["tampering", "adversarial_ML_input", "privilege_escalation"],
+      "r155_reference": "T5.2"
+    },
+    {
+      "id": "DF5",
+      "source": "object_detection_module",
+      "destination": "path_planning",
+      "interface": "internal_IPC",
+      "autosar_mechanism": "ara::com event subscription",
+      "data": "object_list",
+      "threats": ["tampering", "model_evasion_attack"],
+      "r155_reference": "T20.4"
+    },
+    {
+      "id": "DF6",
+      "source": "path_planning",
+      "destination": "VCU",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::com SOME/IP + TLS",
+      "data": "driving_commands",
+      "threats": ["command_injection", "replay", "MITM"],
+      "r155_reference": "T5.1, T6.2"
+    },
+    {
+      "id": "DF7",
+      "source": "TCU",
+      "destination": "adas_firmware_store",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::ucm over TLS",
+      "data": "ota_update_package",
+      "threats": ["malicious_firmware", "replay", "tampering", "OTA_compromise"],
+      "r155_reference": "T12.1"
+    },
+    {
+      "id": "DF8",
+      "source": "V2X_module",
+      "destination": "adas_feature_manager",
+      "interface": "Ethernet",
+      "autosar_mechanism": "ara::com SOME/IP",
+      "data": "v2x_cooperative_messages",
+      "threats": ["spoofing", "sybil_attack", "replay", "malicious_V2X"],
+      "r155_reference": "T4.1, T4.2, T11.2"
+    },
+    {
+      "id": "DF9",
+      "source": "gnss_module",
+      "destination": "path_planning",
+      "interface": "UART_or_Ethernet",
+      "autosar_mechanism": "ara::com",
+      "data": "position_velocity_time",
+      "threats": ["gnss_spoofing", "signal_jamming"],
+      "r155_reference": "T4.1"
+    }
+  ],
+
+  "attack_surfaces": [
+    {
+      "entry": "Camera_interface",
+      "type": "physical_sensor",
+      "access": "physical_or_optical",
+      "description": "Attacker uses adversarial patches, laser blinding, or optical illusions to fool the AI model",
+      "attack_examples": ["Adversarial sticker on stop sign causes misclassification", "IR laser blinds camera sensor"],
+      "r155_reference": "T16.3"
+    },
+    {
+      "entry": "Radar_interface",
+      "type": "wireless_sensor",
+      "access": "wireless_proximity",
+      "description": "Radar spoofing using replay of radar signals or false target injection",
+      "attack_examples": ["Phantom vehicle injected causes unnecessary braking", "Real obstacle hidden by spoofed signals"],
+      "r155_reference": "T4.1"
+    },
+    {
+      "entry": "LiDAR_interface",
+      "type": "optical_sensor",
+      "access": "physical_optical",
+      "description": "LiDAR spoofing using laser pulses to inject false points or blind the sensor",
+      "attack_examples": ["Fake obstacle injected into 3D point cloud", "High-power laser saturates sensor"],
+      "r155_reference": "T16.3, T8.2"
+    },
+    {
+      "entry": "Ethernet_network",
+      "type": "network",
+      "access": "physical_network_tap_or_internal",
+      "description": "Attacker on vehicle Ethernet can inject, replay or intercept ADAS commands and sensor data",
+      "attack_examples": ["MITM between ADAS and VCU", "Ethernet flooding causes deadline misses"],
+      "r155_reference": "T5.1, T8.1"
+    },
+    {
+      "entry": "OTA_update_channel",
+      "type": "remote",
+      "access": "remote_via_TCU",
+      "description": "Malicious OTA package replaces ADAS firmware or AI models",
+      "attack_examples": ["Backdoored AI model via compromised OTA server", "Downgrade attack to vulnerable firmware"],
+      "r155_reference": "T12.1"
+    },
+    {
+      "entry": "V2X_channel",
+      "type": "wireless_network",
+      "access": "wireless_roadside",
+      "description": "Attacker broadcasts fake V2X messages to cause wrong cooperative driving decisions",
+      "attack_examples": ["Fake emergency vehicle message causes sudden braking", "Sybil attack — phantom vehicles"],
+      "r155_reference": "T4.1, T4.2, T11.2"
+    },
+    {
+      "entry": "Diagnostic_interface_DoIP",
+      "type": "diagnostic",
+      "access": "network_or_physical",
+      "description": "UDS over DoIP used to read/write ADAS memory or modify calibration",
+      "attack_examples": ["Extended session unlocked to write calibration", "AI model weights read via memory dump"],
+      "r155_reference": "T9.1, T18.3"
+    },
+    {
+      "entry": "GNSS_signal",
+      "type": "wireless_satellite",
+      "access": "wireless_open_sky",
+      "description": "GNSS spoofing misleads vehicle localization affecting path planning",
+      "attack_examples": ["Fake GPS signals route vehicle wrongly", "GNSS jamming disables localization"],
+      "r155_reference": "T4.1"
+    },
+    {
+      "entry": "Debug_ports_JTAG",
+      "type": "physical_hardware",
+      "access": "physical_direct",
+      "description": "Development debug ports left active allow direct memory access and key extraction",
+      "attack_examples": ["JTAG extracts cryptographic keys from HSM", "Debug port used to inject code"],
+      "r155_reference": "T28.2"
+    }
+  ],
+
+  "threat_catalog": [
+    {
+      "id": "ADAS_T1",
+      "stride_category": "Spoofing",
+      "title": "Camera Adversarial Attack",
+      "description": "Attacker uses adversarial patches or optical illusions to fool the AI object detection model into misclassifying objects",
+      "target_asset": "ai_ml_model",
+      "attack_surface": "Camera_interface",
+      "ai_attack_type": "Model_Evasion",
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Medium",
+      "r155_reference": "T16.3",
+      "enisa_reference": "ENISA_AI_Autonomous_2021 — Adversarial ML",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "ADAS_T2",
+      "stride_category": "Spoofing",
+      "title": "Radar Signal Spoofing",
+      "description": "Attacker replays or synthesizes radar signals to inject phantom objects or hide real ones from ADAS perception",
+      "target_asset": "sensor_raw_data",
+      "attack_surface": "Radar_interface",
+      "ai_attack_type": "Sensor_Spoofing",
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Medium",
+      "r155_reference": "T4.1",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "ADAS_T3",
+      "stride_category": "Spoofing",
+      "title": "LiDAR Point Cloud Injection",
+      "description": "Attacker uses laser pulses to inject false points into LiDAR scan, creating phantom obstacles or removing real ones",
+      "target_asset": "sensor_raw_data",
+      "attack_surface": "LiDAR_interface",
+      "ai_attack_type": "Sensor_Spoofing",
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T16.3",
+      "enisa_reference": "ENISA_AI_Autonomous_2021 — LiDAR spoofing",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "ADAS_T4",
+      "stride_category": "Spoofing",
+      "title": "GNSS Spoofing",
+      "description": "Attacker broadcasts fake GPS signals to mislead vehicle localization causing wrong map matching",
+      "target_asset": "gnss_position",
+      "attack_surface": "GNSS_signal",
+      "ai_attack_type": "Sensor_Spoofing",
+      "impact": { "safety": "High", "financial": "Medium", "operational": "High" },
+      "likelihood": "Medium",
+      "r155_reference": "T4.1",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "ADAS_T5",
+      "stride_category": "Spoofing",
+      "title": "V2X Message Spoofing — Sybil Attack",
+      "description": "Attacker broadcasts fake V2X messages or Sybil attack creating phantom vehicles to manipulate ADAS cooperative driving",
+      "target_asset": "v2x_messages",
+      "attack_surface": "V2X_channel",
+      "ai_attack_type": "Input_Manipulation",
+      "impact": { "safety": "High", "financial": "Medium", "operational": "High" },
+      "likelihood": "Medium",
+      "r155_reference": "T4.1, T4.2, T11.2",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "ADAS_T6",
+      "stride_category": "Tampering",
+      "title": "AI Model Backdoor via OTA",
+      "description": "Attacker delivers malicious OTA update replacing AI model with backdoored version that misclassifies specific trigger inputs",
+      "target_asset": "ai_ml_model",
+      "attack_surface": "OTA_update_channel",
+      "ai_attack_type": "Model_Poisoning_Backdoor",
+      "impact": { "safety": "Critical", "financial": "Critical", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T12.1",
+      "enisa_reference": "ENISA_AI_Autonomous_2021 — Model manipulation",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "ADAS_T7",
+      "stride_category": "Tampering",
+      "title": "Training Data Poisoning",
+      "description": "Attacker injects malicious samples into training dataset so the model learns incorrect behavior for specific scenarios",
+      "target_asset": "training_dataset",
+      "attack_surface": "OTA_update_channel",
+      "ai_attack_type": "Data_Poisoning",
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T20.4",
+      "enisa_reference": "ENISA_AI_Autonomous_2021 — Data poisoning in AI lifecycle",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "ADAS_T8",
+      "stride_category": "Tampering",
+      "title": "Sensor Calibration Data Manipulation",
+      "description": "Attacker modifies sensor calibration via diagnostic interface causing systematic perception errors",
+      "target_asset": "calibration_data",
+      "attack_surface": "Diagnostic_interface_DoIP",
+      "ai_attack_type": "Configuration_Tampering",
+      "impact": { "safety": "High", "financial": "Medium", "operational": "High" },
+      "likelihood": "Low",
+      "r155_reference": "T20.5",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "ADAS_T9",
+      "stride_category": "Tampering",
+      "title": "Driving Command Injection via Ethernet MITM",
+      "description": "Attacker performs MITM between ADAS and VCU replacing legitimate driving commands with malicious ones",
+      "target_asset": "driving_commands",
+      "attack_surface": "Ethernet_network",
+      "ai_attack_type": null,
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T5.1, T6.2",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "ADAS_T10",
+      "stride_category": "Denial_of_Service",
+      "title": "Ethernet Bus Flooding — Real-time Deadline Miss",
+      "description": "Attacker floods vehicle Ethernet with garbage traffic causing ADAS to miss real-time sensor processing deadlines",
+      "target_asset": "sensor_raw_data",
+      "attack_surface": "Ethernet_network",
+      "ai_attack_type": null,
+      "impact": { "safety": "Critical", "financial": "Medium", "operational": "Critical" },
+      "likelihood": "Medium",
+      "r155_reference": "T8.1",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "ADAS_T11",
+      "stride_category": "Denial_of_Service",
+      "title": "LiDAR Blinding Attack",
+      "description": "Attacker uses high-power laser to saturate LiDAR sensor, blinding the 3D perception system completely",
+      "target_asset": "sensor_raw_data",
+      "attack_surface": "LiDAR_interface",
+      "ai_attack_type": "Sensor_Blinding",
+      "impact": { "safety": "Critical", "financial": "High", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T8.2",
+      "enisa_reference": "ENISA_AI_Autonomous_2021 — Sensor blinding",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "ADAS_T12",
+      "stride_category": "Replay",
+      "title": "Sensor Data Replay Attack",
+      "description": "Attacker records and replays old sensor frames to freeze ADAS perception while real conditions change",
+      "target_asset": "sensor_raw_data",
+      "attack_surface": "Ethernet_network",
+      "ai_attack_type": null,
+      "impact": { "safety": "High", "financial": "Medium", "operational": "High" },
+      "likelihood": "Low",
+      "r155_reference": "T6.3",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "ADAS_T13",
+      "stride_category": "Information_Disclosure",
+      "title": "Sensor Data Eavesdropping",
+      "description": "Attacker intercepts Ethernet traffic to extract real-time camera and sensor data enabling surveillance",
+      "target_asset": "sensor_raw_data",
+      "attack_surface": "Ethernet_network",
+      "ai_attack_type": null,
+      "impact": { "safety": "Low", "financial": "Medium", "operational": "Low", "privacy": "High" },
+      "likelihood": "Medium",
+      "r155_reference": "T7.1",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "ADAS_T14",
+      "stride_category": "Privilege_Escalation",
+      "title": "Diagnostic Session Exploit — Memory Write",
+      "description": "Attacker uses UDS over DoIP to unlock extended diagnostic session and gain write access to ADAS memory or AI model storage",
+      "target_asset": "adas_firmware",
+      "attack_surface": "Diagnostic_interface_DoIP",
+      "ai_attack_type": null,
+      "impact": { "safety": "High", "financial": "High", "operational": "High" },
+      "likelihood": "Medium",
+      "r155_reference": "T9.1",
+      "iso21434_clause": "clause-11"
+    },
+    {
+      "id": "ADAS_T15",
+      "stride_category": "Tampering",
+      "title": "Debug Port Physical Attack — Key Extraction",
+      "description": "Attacker with physical access uses JTAG or debug port from development to extract keys or inject malicious code",
+      "target_asset": "adas_ecu_hardware",
+      "attack_surface": "Debug_ports_JTAG",
+      "ai_attack_type": null,
+      "impact": { "safety": "Critical", "financial": "Critical", "operational": "Critical" },
+      "likelihood": "Low",
+      "r155_reference": "T28.2",
+      "iso21434_clause": "clause-11"
+    }
+  ],
+
+  "security_controls": [
+    {
+      "type": "ara::crypto + TLS_1.3",
+      "mechanism": "TLS_1.3",
+      "protects": "Ethernet communication between ADAS and VCU",
+      "standard_ref": "AUTOSAR_AP_R25"
+    },
+    {
+      "type": "MACsec",
+      "mechanism": "Layer2_encryption",
+      "protects": "Ethernet network-level traffic encryption",
+      "standard_ref": "AUTOSAR_AP_R25"
+    },
+    {
+      "type": "SecOC",
+      "mechanism": "CMAC_authentication",
+      "protects": "CAN messages from ADAS to safety ECUs",
+      "standard_ref": "AUTOSAR_AP_R25"
+    },
+    {
+      "type": "HSM",
+      "mechanism": "key_storage_and_secure_boot",
+      "protects": "Firmware integrity and cryptographic keys",
+      "standard_ref": "AUTOSAR_AP_R25 + ISO21434"
+    },
+    {
+      "type": "OTA_signature_verification",
+      "mechanism": "PKI_digital_signature",
+      "protects": "AI model and firmware OTA updates",
+      "standard_ref": "UNECE_R155_Annex5_M16"
+    },
+    {
+      "type": "ara::idsm",
+      "mechanism": "anomaly_detection",
+      "protects": "Runtime monitoring of ADAS network and application behavior",
+      "standard_ref": "AUTOSAR_AP_R25 + UNECE_R155"
+    },
+    {
+      "type": "E2E_protection",
+      "mechanism": "CRC_and_counter",
+      "protects": "Sensor data integrity on internal IPC and ara::com events",
+      "standard_ref": "AUTOSAR_AP_R25"
+    },
+    {
+      "type": "ara::iam",
+      "mechanism": "role_based_access_control",
+      "protects": "Diagnostic interface and service access from unauthorized ECUs",
+      "standard_ref": "AUTOSAR_AP_R25 + UNECE_R155_M18"
+    },
+    {
+      "type": "AI_model_validation",
+      "mechanism": "adversarial_robustness_testing + dataset_validation",
+      "protects": "AI model from adversarial inputs and poisoned training data",
+      "standard_ref": "ENISA_AI_Autonomous_2021 + SAE_J3061"
+    },
+    {
+      "type": "ara::tsync",
+      "mechanism": "time_synchronization",
+      "protects": "Sensor fusion accuracy — prevents timing-based attacks on multi-sensor data",
+      "standard_ref": "AUTOSAR_AP_R25"
+    }
+  ],
+
+  "inter_ecu_relationships": [
+    {
+      "from": "ADAS_1", "to": "VCU",
+      "protocol": "Ethernet", "autosar_mechanism": "ara::com SOME/IP",
+      "data": "driving_commands", "security": "TLS_1.3 + E2E"
+    },
+    {
+      "from": "TCU", "to": "ADAS_1",
+      "protocol": "Ethernet", "autosar_mechanism": "ara::ucm",
+      "data": "ota_update_package", "security": "TLS + PKI signature"
+    },
+    {
+      "from": "ADAS_1", "to": "Gateway",
+      "protocol": "Ethernet", "autosar_mechanism": "ara::diag DoIP",
+      "data": "diagnostic_data", "security": "DoIP + ara::iam"
+    },
+    {
+      "from": "Camera", "to": "ADAS_1",
+      "protocol": "MIPI_CSI2", "autosar_mechanism": "Sensor_Interface_RawDataStream",
+      "data": "raw_frames", "security": "physical_access_control + E2E"
+    },
+    {
+      "from": "Radar", "to": "ADAS_1",
+      "protocol": "Ethernet", "autosar_mechanism": "ara::com SOME/IP event",
+      "data": "radar_point_cloud", "security": "E2E_protection + MACsec"
+    },
+    {
+      "from": "LiDAR", "to": "ADAS_1",
+      "protocol": "Ethernet", "autosar_mechanism": "Sensor_Interface_RawDataStream",
+      "data": "lidar_point_cloud", "security": "E2E_protection + MACsec"
+    },
+    {
+      "from": "GNSS_module", "to": "ADAS_1",
+      "protocol": "UART_or_Ethernet", "autosar_mechanism": "ara::com",
+      "data": "position_velocity_time", "security": "signal_authentication"
+    },
+    {
+      "from": "V2X_module", "to": "ADAS_1",
+      "protocol": "Ethernet", "autosar_mechanism": "ara::com SOME/IP",
+      "data": "v2x_cooperative_messages", "security": "PKI_certificate_V2X_auth"
+    }
+  ],
+
+  "iso21434_tara_context": {
+    "item_definition": "ADAS ECU responsible for environment perception and driving assistance at SAE L2-L3 using AI/ML models and multi-sensor fusion",
+    "item_boundary": "Includes camera, radar, LiDAR, GNSS sensors, sensor fusion stack, AI inference engine, path planner, V2X handler, and Ethernet interface to VCU",
+    "cybersecurity_goals": [
+      "Sensor data integrity shall be maintained to prevent wrong driving decisions",
+      "AI model integrity shall be ensured to prevent misclassification and backdoor attacks",
+      "Driving commands shall be authenticated to prevent command injection",
+      "OTA updates shall be cryptographically verified before application",
+      "V2X messages shall be authenticated to prevent spoofing-based attacks",
+      "Diagnostic access shall be restricted to authorized sessions only"
+    ],
+    "damage_scenarios": [
+      {
+        "id": "DS1",
+        "description": "Loss of vehicle control due to spoofed sensor data causing wrong driving decision",
+        "impact_category": "Safety", "severity": "Critical",
+        "linked_threats": ["ADAS_T2", "ADAS_T3"]
+      },
+      {
+        "id": "DS2",
+        "description": "Collision due to AI model misclassifying pedestrian via adversarial attack or backdoor",
+        "impact_category": "Safety", "severity": "Critical",
+        "linked_threats": ["ADAS_T1", "ADAS_T6", "ADAS_T7"]
+      },
+      {
+        "id": "DS3",
+        "description": "Vehicle navigated to wrong location due to GNSS spoofing",
+        "impact_category": "Operational", "severity": "High",
+        "linked_threats": ["ADAS_T4"]
+      },
+      {
+        "id": "DS4",
+        "description": "Fleet-wide ADAS compromise through malicious OTA update with backdoored AI model",
+        "impact_category": "Financial + Safety", "severity": "Critical",
+        "linked_threats": ["ADAS_T6", "ADAS_T7"]
+      },
+      {
+        "id": "DS5",
+        "description": "ADAS perception disabled due to LiDAR blinding or Ethernet flooding",
+        "impact_category": "Safety + Operational", "severity": "Critical",
+        "linked_threats": ["ADAS_T10", "ADAS_T11"]
+      }
+    ],
+    "sae_j3061_lifecycle_phases": [
+      "Concept phase — cybersecurity goals defined",
+      "Development — security by design, threat modeling",
+      "Validation — adversarial robustness testing, penetration testing",
+      "Operation — continuous monitoring via ara::idsm",
+      "Incident response — OTA patch delivery via ara::ucm"
+    ],
+    "relevant_clauses": [
+      "clause-9 — Item definition and cybersecurity goals",
+      "clause-10 — Cybersecurity requirements",
+      "clause-11 — TARA",
+      "clause-15 — Threat analysis methods"
+    ]
+  }
+}

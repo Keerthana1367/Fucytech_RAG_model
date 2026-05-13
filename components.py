@@ -28,7 +28,7 @@ from config import (
     WEAVIATE_URL, WEAVIATE_API_KEY, WEAVIATE_COLLECTION,
     MITRE_MOBILE, MITRE_ICS, ATM_PATH, CAPEC_PATH, CWE_PATH,
     ECU_PATH, ANNEX_PATH, CLAUSE_PATH, REPORTS_PATH, SECURITY_KB_PATH, PDF_PATH,
-    RANKER_MODEL, TOP_K_RANKER
+    RANKER_MODEL, TOP_K_RANKER, DOMAIN_KB_PATH
 )
 
 
@@ -350,7 +350,7 @@ def parse_and_fix(raw_text: str) -> dict | None:
     try:
         obj = json.loads(cleaned)
     except json.JSONDecodeError as e:
-        print(f"⚠️  JSON parse error: {e}")
+        print(f"[Error] JSON parse error: {e}")
         print(f"Raw output (first 500 chars):\n{cleaned[:500]}")
         return None
     return crosslink_node_ids(stamp_uuids(obj))
@@ -405,27 +405,27 @@ def build_store(all_docs=None):
     try:
         count = store.count_documents()
         if count > 0 and not force_reingest:
-            print(f"✅ Weaviate Cloud is already populated with {count} documents.")
-            print(f"⚡ Skipping re-ingestion to save time and API quota. (Set FORCE_REINGEST=true to override)")
+            print(f"[Success] Weaviate Cloud is already populated with {count} documents.")
+            print("[Info] Skipping re-ingestion to save time and API quota. (Set FORCE_REINGEST=true to override)")
             return store, text_embedder
         if force_reingest:
-            print("🔄 FORCE_REINGEST=true detected. Updating knowledge base...")
+            print("[Info] FORCE_REINGEST=true detected. Updating knowledge base...")
     except Exception as e:
-        print(f"⚠️  Could not check document count: {e}")
+        print(f"[Warning] Could not check document count: {e}")
 
 
     if not all_docs:
-        print("⚠️ No documents provided and Weaviate is empty. Processing stopped.")
+        print("[Warning] No documents provided and Weaviate is empty. Processing stopped.")
         return store, text_embedder
 
-    print(f"✅ Embedders ready  [{EMBED_MODEL}]")
+    print(f"[Success] Embedders ready  [{EMBED_MODEL}]")
     doc_embedder = SentenceTransformersDocumentEmbedder(model=EMBED_MODEL)
     doc_embedder.warm_up()
 
-    print(f"🔄 Embedding {len(all_docs)} documents and storing in Weaviate...")
+    print(f"[Info] Embedding {len(all_docs)} documents and storing in Weaviate...")
     embedded_docs = doc_embedder.run(documents=all_docs)["documents"]
     store.write_documents(embedded_docs, policy=DuplicatePolicy.OVERWRITE)
-    print(f"✅ {store.count_documents()} documents embedded and stored in Weaviate.")
+    print(f"[Success] {store.count_documents()} documents embedded and stored in Weaviate.")
     return store, text_embedder
 
 
